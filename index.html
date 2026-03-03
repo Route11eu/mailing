@@ -1,0 +1,1623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ROUTE11 · Mailing Hub</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    :root {
+      --bg: #0c0e14;
+      --bg-card: #13161f;
+      --bg-card-hover: #181c28;
+      --border: #1e2332;
+      --border-active: #3b82f6;
+      --text: #e2e8f0;
+      --text-dim: #64748b;
+      --text-muted: #475569;
+      --accent-blue: #3b82f6;
+      --accent-green: #22c55e;
+      --accent-red: #ef4444;
+      --accent-orange: #f59e0b;
+      --accent-purple: #a855f7;
+      --green-dark: #166534;
+      --red-dark: #991b1b;
+      --radius: 10px;
+      --radius-lg: 14px;
+      --shadow: 0 4px 24px rgba(0,0,0,0.3);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Subtle animated grid bg */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-image: 
+        radial-gradient(circle at 20% 20%, rgba(59,130,246,0.04) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(168,85,247,0.03) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    #root { position: relative; z-index: 1; }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+    /* Animations */
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+
+    .fade-in { animation: fadeIn 0.4s ease-out; }
+    .slide-up { animation: slideUp 0.5s ease-out; }
+    .shake { animation: shake 0.3s ease-in-out; }
+
+    /* PIN input styles */
+    .pin-dot {
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      transition: all 0.2s ease;
+      background: transparent;
+    }
+    .pin-dot.filled {
+      background: var(--accent-blue);
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 12px rgba(59,130,246,0.4);
+    }
+    .pin-dot.error {
+      background: var(--accent-red);
+      border-color: var(--accent-red);
+      box-shadow: 0 0 12px rgba(239,68,68,0.4);
+    }
+
+    .pin-key {
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text);
+      font-size: 24px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+    }
+    .pin-key:hover { background: var(--bg-card-hover); border-color: var(--text-muted); }
+    .pin-key:active { transform: scale(0.92); background: var(--accent-blue); border-color: var(--accent-blue); }
+
+    /* Input styles */
+    input, select, textarea {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      width: 100%;
+      transition: border-color 0.2s;
+      outline: none;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+    }
+    input::placeholder { color: var(--text-muted); }
+    select { cursor: pointer; }
+    select option { background: var(--bg-card); }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Button styles */
+    .btn {
+      padding: 12px 24px;
+      border-radius: var(--radius);
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 600;
+      font-size: 14px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary { background: var(--accent-blue); color: white; }
+    .btn-primary:hover:not(:disabled) { background: #2563eb; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(59,130,246,0.3); }
+    .btn-green { background: var(--accent-green); color: white; }
+    .btn-green:hover:not(:disabled) { background: #16a34a; transform: translateY(-1px); }
+    .btn-red { background: var(--accent-red); color: white; }
+    .btn-red:hover:not(:disabled) { background: #dc2626; transform: translateY(-1px); }
+    .btn-orange { background: var(--accent-orange); color: #1a1a1a; }
+    .btn-orange:hover:not(:disabled) { background: #d97706; transform: translateY(-1px); }
+    .btn-ghost { background: transparent; color: var(--text-dim); border: 1px solid var(--border); }
+    .btn-ghost:hover { background: var(--bg-card-hover); color: var(--text); border-color: var(--text-muted); }
+
+    /* Card */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+    }
+
+    /* Toast notification */
+    .toast {
+      position: fixed;
+      top: 24px;
+      right: 24px;
+      padding: 14px 20px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-weight: 500;
+      z-index: 1000;
+      animation: fadeIn 0.3s ease-out;
+      max-width: 400px;
+      box-shadow: var(--shadow);
+    }
+    .toast-success { background: var(--green-dark); color: #bbf7d0; border: 1px solid #22c55e44; }
+    .toast-error { background: var(--red-dark); color: #fecaca; border: 1px solid #ef444444; }
+    .toast-info { background: #1e3a5f; color: #93c5fd; border: 1px solid #3b82f644; }
+
+    /* Spinner */
+    .spinner {
+      width: 20px; height: 20px;
+      border: 2px solid rgba(255,255,255,0.2);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Badge */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .badge-green { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .badge-red { background: rgba(239,68,68,0.15); color: #f87171; }
+    .badge-blue { background: rgba(59,130,246,0.15); color: #60a5fa; }
+    .badge-orange { background: rgba(245,158,11,0.15); color: #fbbf24; }
+
+    /* Checkbox */
+    .checkbox-custom {
+      appearance: none;
+      width: 20px; height: 20px;
+      border: 2px solid var(--border);
+      border-radius: 5px;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+    .checkbox-custom:checked {
+      background: var(--accent-blue);
+      border-color: var(--accent-blue);
+    }
+    .checkbox-custom:checked::after {
+      content: '✓';
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      color: white;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    /* Toggle switch */
+    .toggle-track {
+      width: 44px; height: 24px;
+      border-radius: 12px;
+      background: var(--border);
+      cursor: pointer;
+      position: relative;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+    .toggle-track.active { background: var(--accent-blue); }
+    .toggle-thumb {
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      background: white;
+      position: absolute;
+      top: 3px; left: 3px;
+      transition: transform 0.2s;
+    }
+    .toggle-track.active .toggle-thumb { transform: translateX(20px); }
+
+    /* Tab styles */
+    .tab-btn {
+      padding: 10px 20px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-dim);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+      font-family: 'DM Sans', sans-serif;
+    }
+    .tab-btn.active { color: var(--accent-blue); border-bottom-color: var(--accent-blue); }
+    .tab-btn:hover:not(.active) { color: var(--text); }
+
+    /* Preview frame */
+    .preview-frame {
+      background: white;
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    // ==================== CONSTANTS ====================
+    const PIN_CODE = '1168';
+    
+    // GetResponse API nie obsługuje CORS — potrzebny proxy.
+    // Po utworzeniu Cloudflare Worker wklej tutaj jego URL:
+    const USE_PROXY = true;
+    const PROXY_URL = 'https://gr-proxy.route11eu.workers.dev';
+    const GR_API_DIRECT = 'https://api.getresponse.com/v3';
+
+    const COUNTRY_NAMES = {
+      'DE': 'Germany', 'PL': 'Poland', 'BE': 'Belgium', 'NL': 'Netherlands',
+      'FR': 'France', 'AT': 'Austria', 'CZ': 'Czechia', 'HU': 'Hungary',
+      'IT': 'Italy', 'ES': 'Spain', 'SK': 'Slovakia', 'CH': 'Switzerland',
+      'DK': 'Denmark', 'SE': 'Sweden', 'UK': 'United Kingdom'
+    };
+
+    const COUNTRY_FLAGS = {
+      'DE': '🇩🇪', 'PL': '🇵🇱', 'BE': '🇧🇪', 'NL': '🇳🇱', 'FR': '🇫🇷',
+      'AT': '🇦🇹', 'CZ': '🇨🇿', 'HU': '🇭🇺', 'IT': '🇮🇹', 'ES': '🇪🇸',
+      'SK': '🇸🇰', 'CH': '🇨🇭', 'DK': '🇩🇰', 'SE': '🇸🇪', 'UK': '🇬🇧'
+    };
+
+    // ==================== GETRESPONSE API SERVICE ====================
+    class GetResponseAPI {
+      constructor(apiKey) {
+        this.apiKey = apiKey;
+      }
+
+      async request(endpoint, method = 'GET', body = null) {
+        let url, opts;
+
+        if (USE_PROXY) {
+          // Proxy mode: send everything to proxy.php
+          url = PROXY_URL;
+          opts = {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              apiKey: this.apiKey,
+              endpoint: endpoint,
+              method: method,
+              body: body
+            })
+          };
+        } else {
+          // Direct mode (wymaga CORS - nie działa z przeglądarki)
+          url = GR_API_DIRECT + endpoint;
+          opts = {
+            method,
+            headers: {
+              'X-Auth-Token': `api-key ${this.apiKey}`,
+              'Content-Type': 'application/json'
+            }
+          };
+          if (body) opts.body = JSON.stringify(body);
+        }
+
+        const res = await fetch(url, opts);
+        
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.message || err.error || `HTTP ${res.status}: ${res.statusText}`);
+        }
+        if (res.status === 204) return null;
+        return res.json();
+      }
+
+      async getCampaigns() {
+        return this.request('/campaigns?perPage=100');
+      }
+
+      async getFromFields() {
+        return this.request('/from-fields');
+      }
+
+      async getNewsletters(params = {}) {
+        const qs = new URLSearchParams(params).toString();
+        return this.request(`/newsletters${qs ? '?' + qs : ''}`);
+      }
+
+      async createNewsletter(data) {
+        return this.request('/newsletters', 'POST', data);
+      }
+
+      async getAccountInfo() {
+        return this.request('/accounts');
+      }
+    }
+
+    // ==================== TOAST SYSTEM ====================
+    function Toast({ toasts, removeToast }) {
+      return (
+        <div>
+          {toasts.map(t => (
+            <div key={t.id} className={`toast toast-${t.type}`} onClick={() => removeToast(t.id)}>
+              {t.type === 'success' && '✓ '}{t.type === 'error' && '✕ '}{t.type === 'info' && 'ℹ '}
+              {t.message}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    function useToast() {
+      const [toasts, setToasts] = useState([]);
+      const addToast = (message, type = 'info') => {
+        const id = Date.now();
+        setToasts(prev => [...prev, { id, message, type }]);
+        setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+      };
+      const removeToast = (id) => setToasts(prev => prev.filter(t => t.id !== id));
+      return { toasts, addToast, removeToast };
+    }
+
+    // ==================== MAIN APP ====================
+    function App() {
+      const [authenticated, setAuthenticated] = useState(false);
+      const [apiKey, setApiKey] = useState(() => {
+        try { return sessionStorage.getItem('gr_api_key') || ''; } catch { return ''; }
+      });
+      const [grApi, setGrApi] = useState(null);
+      const { toasts, addToast, removeToast } = useToast();
+
+      useEffect(() => {
+        try {
+          if (sessionStorage.getItem('r11_auth') === 'true') setAuthenticated(true);
+        } catch {}
+      }, []);
+
+      useEffect(() => {
+        if (apiKey) {
+          setGrApi(new GetResponseAPI(apiKey));
+          try { sessionStorage.setItem('gr_api_key', apiKey); } catch {}
+        }
+      }, [apiKey]);
+
+      const handleLogin = () => {
+        setAuthenticated(true);
+        try { sessionStorage.setItem('r11_auth', 'true'); } catch {}
+      };
+
+      const handleLogout = () => {
+        setAuthenticated(false);
+        try { sessionStorage.removeItem('r11_auth'); } catch {}
+      };
+
+      if (!authenticated) {
+        return (
+          <>
+            <Toast toasts={toasts} removeToast={removeToast} />
+            <PinScreen onSuccess={handleLogin} addToast={addToast} />
+          </>
+        );
+      }
+
+      return (
+        <>
+          <Toast toasts={toasts} removeToast={removeToast} />
+          <MainApp
+            apiKey={apiKey}
+            setApiKey={setApiKey}
+            grApi={grApi}
+            addToast={addToast}
+            onLogout={handleLogout}
+          />
+        </>
+      );
+    }
+
+    // ==================== PIN SCREEN ====================
+    function PinScreen({ onSuccess, addToast }) {
+      const [pin, setPin] = useState('');
+      const [error, setError] = useState(false);
+
+      const handleKey = (num) => {
+        if (pin.length >= 4) return;
+        const newPin = pin + num;
+        setPin(newPin);
+        setError(false);
+
+        if (newPin.length === 4) {
+          if (newPin === PIN_CODE) {
+            setTimeout(onSuccess, 300);
+          } else {
+            setError(true);
+            addToast('Invalid PIN. Try again.', 'error');
+            setTimeout(() => { setPin(''); setError(false); }, 800);
+          }
+        }
+      };
+
+      const handleBackspace = () => {
+        setPin(pin.slice(0, -1));
+        setError(false);
+      };
+
+      return (
+        <div style={{
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px'
+        }}>
+          <div className="fade-in" style={{ textAlign: 'center', marginBottom: 48 }}>
+            <div style={{
+              fontSize: 48, fontWeight: 700,
+              letterSpacing: '-2px',
+              background: 'linear-gradient(135deg, #3b82f6, #a855f7)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              marginBottom: 8
+            }}>ROUTE11</div>
+            <div style={{ color: 'var(--text-dim)', fontSize: 14, fontWeight: 500, letterSpacing: '3px', textTransform: 'uppercase' }}>
+              Mailing Hub
+            </div>
+          </div>
+
+          {/* PIN dots */}
+          <div className={error ? 'shake' : ''} style={{ display: 'flex', gap: 16, marginBottom: 40 }}>
+            {[0,1,2,3].map(i => (
+              <div key={i} className={`pin-dot ${i < pin.length ? (error ? 'error' : 'filled') : ''}`} />
+            ))}
+          </div>
+
+          {/* Numpad */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 16 }}>
+            {[1,2,3,4,5,6,7,8,9].map(n => (
+              <button key={n} className="pin-key" onClick={() => handleKey(String(n))}>{n}</button>
+            ))}
+            <div />
+            <button className="pin-key" onClick={() => handleKey('0')}>0</button>
+            <button className="pin-key" onClick={handleBackspace} style={{ fontSize: 18 }}>⌫</button>
+          </div>
+
+          <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 24 }}>
+            Enter your 4-digit PIN to access
+          </p>
+        </div>
+      );
+    }
+
+    // ==================== MAIN APP LAYOUT ====================
+    function MainApp({ apiKey, setApiKey, grApi, addToast, onLogout }) {
+      const [activeTab, setActiveTab] = useState('generator');
+      const [grConnected, setGrConnected] = useState(false);
+      const [campaigns, setCampaigns] = useState([]);
+      const [fromFields, setFromFields] = useState([]);
+      const [loadingGR, setLoadingGR] = useState(false);
+
+      // Connect to GetResponse
+      const connectGR = async (key) => {
+        if (!key) return;
+        setLoadingGR(true);
+        try {
+          const api = new GetResponseAPI(key);
+          const [camps, fields] = await Promise.all([
+            api.getCampaigns(),
+            api.getFromFields()
+          ]);
+          setCampaigns(camps || []);
+          setFromFields(fields || []);
+          setGrConnected(true);
+          setApiKey(key);
+          addToast(`Connected! ${camps.length} campaigns loaded.`, 'success');
+        } catch (err) {
+          addToast(`Connection failed: ${err.message}`, 'error');
+          setGrConnected(false);
+        }
+        setLoadingGR(false);
+      };
+
+      useEffect(() => {
+        if (apiKey && !grConnected) connectGR(apiKey);
+      }, []);
+
+      return (
+        <div style={{ minHeight: '100vh' }}>
+          {/* Header */}
+          <header style={{
+            borderBottom: '1px solid var(--border)',
+            padding: '0 24px',
+            background: 'rgba(19,22,31,0.8)',
+            backdropFilter: 'blur(12px)',
+            position: 'sticky',
+            top: 0,
+            zIndex: 100
+          }}>
+            <div style={{
+              maxWidth: 1200,
+              margin: '0 auto',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              height: 60
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <span style={{
+                  fontSize: 22, fontWeight: 700, letterSpacing: '-1px',
+                  background: 'linear-gradient(135deg, #3b82f6, #a855f7)',
+                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'
+                }}>ROUTE11</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>·</span>
+                <span style={{ color: 'var(--text-dim)', fontSize: 13, fontWeight: 500 }}>Mailing Hub</span>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{
+                    width: 8, height: 8, borderRadius: '50%',
+                    background: grConnected ? 'var(--accent-green)' : 'var(--accent-red)',
+                    boxShadow: grConnected ? '0 0 8px rgba(34,197,94,0.5)' : '0 0 8px rgba(239,68,68,0.5)'
+                  }} />
+                  <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+                    {grConnected ? 'GetResponse' : 'Disconnected'}
+                  </span>
+                </div>
+                <button className="btn btn-ghost" style={{ padding: '6px 14px', fontSize: 12 }} onClick={onLogout}>
+                  Logout
+                </button>
+              </div>
+            </div>
+
+            {/* Tabs */}
+            <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', gap: 4 }}>
+              <button className={`tab-btn ${activeTab === 'generator' ? 'active' : ''}`} onClick={() => setActiveTab('generator')}>
+                ✉️ Generator
+              </button>
+              <button className={`tab-btn ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
+                ⚙️ Settings
+              </button>
+            </div>
+          </header>
+
+          {/* Content */}
+          <main style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 24px 80px' }}>
+            {activeTab === 'generator' && (
+              <MailingGenerator
+                grApi={grApi}
+                grConnected={grConnected}
+                campaigns={campaigns}
+                fromFields={fromFields}
+                addToast={addToast}
+              />
+            )}
+            {activeTab === 'settings' && (
+              <SettingsPanel
+                apiKey={apiKey}
+                grConnected={grConnected}
+                campaigns={campaigns}
+                fromFields={fromFields}
+                loadingGR={loadingGR}
+                onConnect={connectGR}
+                addToast={addToast}
+              />
+            )}
+          </main>
+        </div>
+      );
+    }
+
+    // ==================== SETTINGS PANEL ====================
+    function SettingsPanel({ apiKey, grConnected, campaigns, fromFields, loadingGR, onConnect, addToast }) {
+      const [key, setKey] = useState(apiKey);
+      const [showKey, setShowKey] = useState(false);
+
+      return (
+        <div className="fade-in" style={{ maxWidth: 640 }}>
+          <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 24 }}>GetResponse API Settings</h2>
+
+          <div className="card" style={{ marginBottom: 20 }}>
+            <label>API Key</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                type={showKey ? 'text' : 'password'}
+                value={key}
+                onChange={e => setKey(e.target.value)}
+                placeholder="Paste your GetResponse API key..."
+                style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }}
+              />
+              <button className="btn btn-ghost" style={{ padding: '8px 12px', flexShrink: 0 }}
+                onClick={() => setShowKey(!showKey)}>
+                {showKey ? '🙈' : '👁️'}
+              </button>
+              <button className="btn btn-primary" style={{ flexShrink: 0 }}
+                disabled={!key || loadingGR}
+                onClick={() => onConnect(key)}>
+                {loadingGR ? <div className="spinner" /> : 'Connect'}
+              </button>
+            </div>
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
+              Find your API key in GetResponse → Tools → Integrations & API → API
+            </p>
+          </div>
+
+          {grConnected && (
+            <div className="card fade-in">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--accent-green)' }} />
+                <span style={{ fontWeight: 600 }}>Connected</span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 4 }}>CAMPAIGNS</div>
+                  <div style={{ fontSize: 28, fontWeight: 700, fontFamily: 'JetBrains Mono' }}>{campaigns.length}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 4 }}>FROM FIELDS</div>
+                  <div style={{ fontSize: 28, fontWeight: 700, fontFamily: 'JetBrains Mono' }}>{fromFields.length}</div>
+                </div>
+              </div>
+
+              {campaigns.length > 0 && (
+                <div style={{ marginTop: 16 }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 8 }}>AVAILABLE CAMPAIGNS</div>
+                  <div style={{ maxHeight: 200, overflow: 'auto' }}>
+                    {campaigns.map(c => (
+                      <div key={c.campaignId} style={{
+                        padding: '8px 12px',
+                        borderRadius: 6,
+                        background: 'var(--bg)',
+                        marginBottom: 4,
+                        fontSize: 13,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}>
+                        <span>{c.name}</span>
+                        <span className="badge badge-blue" style={{ fontFamily: 'JetBrains Mono', fontSize: 10 }}>
+                          {c.campaignId}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ==================== MAILING GENERATOR ====================
+    function MailingGenerator({ grApi, grConnected, campaigns, fromFields, addToast }) {
+      const [mode, setMode] = useState(null);
+
+      if (!mode) {
+        return (
+          <div className="fade-in">
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Create Mailing</h2>
+            <p style={{ color: 'var(--text-dim)', fontSize: 14, marginBottom: 32 }}>Choose mailing type to start generating</p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+              <button onClick={() => setMode('free-tank')} style={{
+                background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)',
+                padding: 32, cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s',
+                display: 'block', width: '100%'
+              }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = '#22c55e'; e.currentTarget.style.background = 'var(--bg-card-hover)'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--bg-card)'; }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                  <div style={{
+                    width: 48, height: 48, borderRadius: 12,
+                    background: 'rgba(34,197,94,0.15)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 24
+                  }}>🟢</div>
+                  <div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: '#4ade80' }}>FREE TANK</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>Wolne auto</div>
+                  </div>
+                </div>
+                <p style={{ fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.5 }}>
+                  Announce available tankers with location, date, destination and ADR status
+                </p>
+              </button>
+
+              <button onClick={() => setMode('route')} style={{
+                background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)',
+                padding: 32, cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s',
+                display: 'block', width: '100%'
+              }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = '#ef4444'; e.currentTarget.style.background = 'var(--bg-card-hover)'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--bg-card)'; }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                  <div style={{
+                    width: 48, height: 48, borderRadius: 12,
+                    background: 'rgba(239,68,68,0.15)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 24
+                  }}>🔴</div>
+                  <div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: '#f87171' }}>ROUTE / LOAD</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>Wolny ładunek</div>
+                  </div>
+                </div>
+                <p style={{ fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.5 }}>
+                  Send load offers with loading/unloading details, dates and requirements
+                </p>
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="fade-in">
+          <button className="btn btn-ghost" style={{ marginBottom: 20 }} onClick={() => setMode(null)}>
+            ← Back to selection
+          </button>
+
+          {mode === 'free-tank' ? (
+            <FreeTankForm grApi={grApi} grConnected={grConnected} campaigns={campaigns} fromFields={fromFields} addToast={addToast} />
+          ) : (
+            <RouteForm grApi={grApi} grConnected={grConnected} campaigns={campaigns} fromFields={fromFields} addToast={addToast} />
+          )}
+        </div>
+      );
+    }
+
+    // ==================== FREE TANK FORM ====================
+    function FreeTankForm({ grApi, grConnected, campaigns, fromFields, addToast }) {
+      const [tanks, setTanks] = useState([createEmptyTank()]);
+      const [preview, setPreview] = useState(null);
+      const [sending, setSending] = useState(false);
+      const [sendConfig, setSendConfig] = useState({
+        campaignId: '',
+        fromFieldId: '',
+        sendMode: 'draft', // draft | now | schedule
+        scheduleDate: '',
+        selectedCampaigns: []
+      });
+
+      function createEmptyTank() {
+        return {
+          id: Date.now() + Math.random(),
+          location: '', postalCode: '', country: '',
+          date: new Date().toISOString().split('T')[0],
+          destination: 'ALL_EU', customDestinations: '',
+          adr: false, tankType: 'MONO/MULTI'
+        };
+      }
+
+      const addTank = () => setTanks([...tanks, createEmptyTank()]);
+      const removeTank = (id) => tanks.length > 1 && setTanks(tanks.filter(t => t.id !== id));
+      const updateTank = (id, field, value) => setTanks(tanks.map(t => t.id === id ? {...t, [field]: value} : t));
+
+      const handleGenerate = () => {
+        const html = generateMultiFreeTankHTML(tanks);
+        const subject = generateSubject(tanks);
+        const preheader = generatePreheader(tanks);
+        const internalName = generateInternalName(tanks);
+        setPreview({ html, subject, preheader, internalName });
+      };
+
+      const handleSendGR = async () => {
+        if (!grApi || !preview) return;
+        setSending(true);
+        try {
+          const payload = {
+            name: preview.internalName,
+            type: sendConfig.sendMode === 'draft' ? 'draft' : 'broadcast',
+            subject: preview.subject,
+            fromField: { fromFieldId: sendConfig.fromFieldId },
+            content: { html: preview.html },
+            campaign: { campaignId: sendConfig.campaignId }
+          };
+
+          // Add send settings for broadcast
+          if (sendConfig.sendMode !== 'draft') {
+            payload.sendSettings = {
+              selectedCampaigns: sendConfig.selectedCampaigns.length > 0
+                ? sendConfig.selectedCampaigns
+                : [sendConfig.campaignId]
+            };
+            if (sendConfig.sendMode === 'schedule' && sendConfig.scheduleDate) {
+              payload.sendOn = new Date(sendConfig.scheduleDate).toISOString();
+            }
+          }
+
+          await grApi.createNewsletter(payload);
+          addToast(
+            sendConfig.sendMode === 'draft'
+              ? 'Newsletter saved as draft in GetResponse!'
+              : 'Newsletter queued for sending!',
+            'success'
+          );
+        } catch (err) {
+          addToast(`Failed: ${err.message}`, 'error');
+        }
+        setSending(false);
+      };
+
+      const downloadHTML = () => {
+        const blob = new Blob([preview.html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `${preview.internalName}.html`; a.click();
+        URL.revokeObjectURL(url);
+      };
+
+      const canGenerate = tanks.every(t => t.location && t.country);
+
+      return (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 10,
+              background: 'rgba(34,197,94,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 20
+            }}>🟢</div>
+            <div>
+              <h2 style={{ fontSize: 20, fontWeight: 700 }}>Free Tank Generator</h2>
+              <p style={{ fontSize: 13, color: 'var(--text-dim)' }}>{tanks.length} tank{tanks.length > 1 ? 's' : ''}</p>
+            </div>
+          </div>
+
+          {tanks.map((tank, idx) => (
+            <div key={tank.id} className="card slide-up" style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className="badge badge-green">Tank #{idx + 1}</span>
+                  {tank.country && COUNTRY_FLAGS[tank.country] && (
+                    <span style={{ fontSize: 18 }}>{COUNTRY_FLAGS[tank.country]}</span>
+                  )}
+                </div>
+                {tanks.length > 1 && (
+                  <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 12, color: 'var(--accent-red)' }}
+                    onClick={() => removeTank(tank.id)}>Remove</button>
+                )}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+                <div>
+                  <label>City</label>
+                  <input value={tank.location} onChange={e => updateTank(tank.id, 'location', e.target.value)} placeholder="Oświęcim" />
+                </div>
+                <div>
+                  <label>Postal Code</label>
+                  <input value={tank.postalCode} onChange={e => updateTank(tank.id, 'postalCode', e.target.value)} placeholder="32-600" />
+                </div>
+                <div>
+                  <label>Country</label>
+                  <input value={tank.country} onChange={e => updateTank(tank.id, 'country', e.target.value.toUpperCase())} placeholder="PL" maxLength="2" style={{ textTransform: 'uppercase' }} />
+                </div>
+                <div>
+                  <label>Date Available</label>
+                  <input type="date" value={tank.date} onChange={e => updateTank(tank.id, 'date', e.target.value)} />
+                </div>
+                <div>
+                  <label>Destination</label>
+                  <select value={tank.destination} onChange={e => updateTank(tank.id, 'destination', e.target.value)}>
+                    <option value="ALL_EU">🇪🇺 ALL EU</option>
+                    <option value="PL">🇵🇱 Poland</option>
+                    <option value="DE">🇩🇪 Germany</option>
+                    <option value="CUSTOM">Custom...</option>
+                  </select>
+                </div>
+                {tank.destination === 'CUSTOM' && (
+                  <div>
+                    <label>Country Codes</label>
+                    <input value={tank.customDestinations} onChange={e => updateTank(tank.id, 'customDestinations', e.target.value.toUpperCase())} placeholder="DE, NL, BE" style={{ textTransform: 'uppercase' }} />
+                  </div>
+                )}
+                <div>
+                  <label>Tank Type</label>
+                  <select value={tank.tankType} onChange={e => updateTank(tank.id, 'tankType', e.target.value)}>
+                    <option value="MONO/MULTI">MONO/MULTI</option>
+                    <option value="MONO">MONO</option>
+                    <option value="MULTI">MULTI</option>
+                  </select>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'end', paddingBottom: 4 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 0 }}>
+                    <input type="checkbox" className="checkbox-custom" checked={tank.adr} onChange={e => updateTank(tank.id, 'adr', e.target.checked)} />
+                    <span style={{ fontSize: 13, fontWeight: 500, color: tank.adr ? 'var(--accent-red)' : 'var(--text-dim)' }}>
+                      ADR
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          <button className="btn btn-ghost" style={{ width: '100%', marginBottom: 16, justifyContent: 'center' }} onClick={addTank}>
+            + Add Tank
+          </button>
+
+          <button className="btn btn-green" style={{ width: '100%', justifyContent: 'center' }}
+            disabled={!canGenerate} onClick={handleGenerate}>
+            Generate Preview ({tanks.length} {tanks.length === 1 ? 'Tank' : 'Tanks'})
+          </button>
+
+          {preview && (
+            <PreviewSection
+              preview={preview}
+              onDownload={downloadHTML}
+              onSendGR={handleSendGR}
+              grConnected={grConnected}
+              campaigns={campaigns}
+              fromFields={fromFields}
+              sendConfig={sendConfig}
+              setSendConfig={setSendConfig}
+              sending={sending}
+              color="green"
+            />
+          )}
+        </div>
+      );
+    }
+
+    // ==================== ROUTE FORM ====================
+    function RouteForm({ grApi, grConnected, campaigns, fromFields, addToast }) {
+      const [routes, setRoutes] = useState([createEmptyRoute()]);
+      const [preview, setPreview] = useState(null);
+      const [sending, setSending] = useState(false);
+      const [sendConfig, setSendConfig] = useState({
+        campaignId: '',
+        fromFieldId: '',
+        sendMode: 'draft',
+        scheduleDate: '',
+        selectedCampaigns: []
+      });
+
+      function createEmptyRoute() {
+        return {
+          id: Date.now() + Math.random(),
+          loadingCity: '', loadingPostal: '', loadingCountry: '',
+          unloadingCity: '', unloadingPostal: '', unloadingCountry: '',
+          date: new Date().toISOString().split('T')[0],
+          adr: false, tankType: 'MONO/MULTI', notes: ''
+        };
+      }
+
+      const addRoute = () => setRoutes([...routes, createEmptyRoute()]);
+      const removeRoute = (id) => routes.length > 1 && setRoutes(routes.filter(r => r.id !== id));
+      const updateRoute = (id, field, value) => setRoutes(routes.map(r => r.id === id ? {...r, [field]: value} : r));
+
+      const handleGenerate = () => {
+        const html = generateMultiRouteHTML(routes);
+        const subject = generateRouteSubject(routes);
+        const preheader = generateRoutePreheader(routes);
+        const internalName = generateRouteInternalName(routes);
+        setPreview({ html, subject, preheader, internalName });
+      };
+
+      const handleSendGR = async () => {
+        if (!grApi || !preview) return;
+        setSending(true);
+        try {
+          const payload = {
+            name: preview.internalName,
+            type: sendConfig.sendMode === 'draft' ? 'draft' : 'broadcast',
+            subject: preview.subject,
+            fromField: { fromFieldId: sendConfig.fromFieldId },
+            content: { html: preview.html },
+            campaign: { campaignId: sendConfig.campaignId }
+          };
+
+          if (sendConfig.sendMode !== 'draft') {
+            payload.sendSettings = {
+              selectedCampaigns: sendConfig.selectedCampaigns.length > 0
+                ? sendConfig.selectedCampaigns
+                : [sendConfig.campaignId]
+            };
+            if (sendConfig.sendMode === 'schedule' && sendConfig.scheduleDate) {
+              payload.sendOn = new Date(sendConfig.scheduleDate).toISOString();
+            }
+          }
+
+          await grApi.createNewsletter(payload);
+          addToast(
+            sendConfig.sendMode === 'draft'
+              ? 'Newsletter saved as draft in GetResponse!'
+              : 'Newsletter queued for sending!',
+            'success'
+          );
+        } catch (err) {
+          addToast(`Failed: ${err.message}`, 'error');
+        }
+        setSending(false);
+      };
+
+      const downloadHTML = () => {
+        const blob = new Blob([preview.html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `${preview.internalName}.html`; a.click();
+        URL.revokeObjectURL(url);
+      };
+
+      const canGenerate = routes.every(r => r.loadingCity && r.unloadingCity && r.loadingCountry && r.unloadingCountry);
+
+      return (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 10,
+              background: 'rgba(239,68,68,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 20
+            }}>🔴</div>
+            <div>
+              <h2 style={{ fontSize: 20, fontWeight: 700 }}>Route / Load Generator</h2>
+              <p style={{ fontSize: 13, color: 'var(--text-dim)' }}>{routes.length} route{routes.length > 1 ? 's' : ''}</p>
+            </div>
+          </div>
+
+          {routes.map((route, idx) => (
+            <div key={route.id} className="card slide-up" style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <span className="badge badge-red">Route #{idx + 1}</span>
+                {routes.length > 1 && (
+                  <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 12, color: 'var(--accent-red)' }}
+                    onClick={() => removeRoute(route.id)}>Remove</button>
+                )}
+              </div>
+
+              {/* Loading section */}
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent-blue)', marginBottom: 8, letterSpacing: 1 }}>
+                📍 LOADING
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 16 }}>
+                <div>
+                  <label>City</label>
+                  <input value={route.loadingCity} onChange={e => updateRoute(route.id, 'loadingCity', e.target.value)} placeholder="Hamburg" />
+                </div>
+                <div>
+                  <label>Postal Code</label>
+                  <input value={route.loadingPostal} onChange={e => updateRoute(route.id, 'loadingPostal', e.target.value)} placeholder="20095" />
+                </div>
+                <div>
+                  <label>Country</label>
+                  <input value={route.loadingCountry} onChange={e => updateRoute(route.id, 'loadingCountry', e.target.value.toUpperCase())} placeholder="DE" maxLength="2" style={{ textTransform: 'uppercase' }} />
+                </div>
+              </div>
+
+              {/* Unloading section */}
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent-green)', marginBottom: 8, letterSpacing: 1 }}>
+                🏁 UNLOADING
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 16 }}>
+                <div>
+                  <label>City</label>
+                  <input value={route.unloadingCity} onChange={e => updateRoute(route.id, 'unloadingCity', e.target.value)} placeholder="Warsaw" />
+                </div>
+                <div>
+                  <label>Postal Code</label>
+                  <input value={route.unloadingPostal} onChange={e => updateRoute(route.id, 'unloadingPostal', e.target.value)} placeholder="00-001" />
+                </div>
+                <div>
+                  <label>Country</label>
+                  <input value={route.unloadingCountry} onChange={e => updateRoute(route.id, 'unloadingCountry', e.target.value.toUpperCase())} placeholder="PL" maxLength="2" style={{ textTransform: 'uppercase' }} />
+                </div>
+              </div>
+
+              {/* Details */}
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 8, letterSpacing: 1 }}>
+                📋 DETAILS
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+                <div>
+                  <label>Loading Date</label>
+                  <input type="date" value={route.date} onChange={e => updateRoute(route.id, 'date', e.target.value)} />
+                </div>
+                <div>
+                  <label>Tank Type</label>
+                  <select value={route.tankType} onChange={e => updateRoute(route.id, 'tankType', e.target.value)}>
+                    <option value="MONO/MULTI">MONO/MULTI</option>
+                    <option value="MONO">MONO</option>
+                    <option value="MULTI">MULTI</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Notes</label>
+                  <input value={route.notes} onChange={e => updateRoute(route.id, 'notes', e.target.value)} placeholder="neutral, TILL 15:00, FOOD..." />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'end', paddingBottom: 4 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 0 }}>
+                    <input type="checkbox" className="checkbox-custom" checked={route.adr} onChange={e => updateRoute(route.id, 'adr', e.target.checked)} />
+                    <span style={{ fontSize: 13, fontWeight: 500, color: route.adr ? 'var(--accent-red)' : 'var(--text-dim)' }}>ADR</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          <button className="btn btn-ghost" style={{ width: '100%', marginBottom: 16, justifyContent: 'center' }} onClick={addRoute}>
+            + Add Route
+          </button>
+
+          <button className="btn btn-red" style={{ width: '100%', justifyContent: 'center' }}
+            disabled={!canGenerate} onClick={handleGenerate}>
+            Generate Preview ({routes.length} {routes.length === 1 ? 'Route' : 'Routes'})
+          </button>
+
+          {preview && (
+            <PreviewSection
+              preview={preview}
+              onDownload={downloadHTML}
+              onSendGR={handleSendGR}
+              grConnected={grConnected}
+              campaigns={campaigns}
+              fromFields={fromFields}
+              sendConfig={sendConfig}
+              setSendConfig={setSendConfig}
+              sending={sending}
+              color="red"
+            />
+          )}
+        </div>
+      );
+    }
+
+    // ==================== PREVIEW + GETRESPONSE SEND SECTION ====================
+    function PreviewSection({ preview, onDownload, onSendGR, grConnected, campaigns, fromFields, sendConfig, setSendConfig, sending, color }) {
+      const [showSource, setShowSource] = useState(false);
+
+      const copySubject = () => {
+        navigator.clipboard.writeText(preview.subject);
+      };
+
+      return (
+        <div className="card slide-up" style={{ marginTop: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+            <h3 style={{ fontSize: 18, fontWeight: 700 }}>Preview</h3>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-ghost" style={{ padding: '6px 14px', fontSize: 12 }}
+                onClick={() => setShowSource(!showSource)}>
+                {showSource ? '👁️ Preview' : '</> Source'}
+              </button>
+            </div>
+          </div>
+
+          {/* Metadata */}
+          <div style={{
+            background: 'var(--bg)', borderRadius: 'var(--radius)',
+            padding: 16, marginBottom: 16
+          }}>
+            <div style={{ display: 'grid', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 80, flexShrink: 0, textTransform: 'uppercase' }}>Subject</span>
+                <code style={{ fontSize: 12, color: 'var(--text)', fontFamily: 'JetBrains Mono', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {preview.subject}
+                </code>
+                <button onClick={copySubject} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: '2px 6px' }} title="Copy">📋</button>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 80, flexShrink: 0, textTransform: 'uppercase' }}>Preheader</span>
+                <code style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'JetBrains Mono' }}>{preview.preheader}</code>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 80, flexShrink: 0, textTransform: 'uppercase' }}>Name</span>
+                <code style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'JetBrains Mono' }}>{preview.internalName}</code>
+              </div>
+            </div>
+          </div>
+
+          {/* Preview / Source */}
+          {showSource ? (
+            <pre style={{
+              background: 'var(--bg)', borderRadius: 'var(--radius)',
+              padding: 16, fontSize: 11, fontFamily: 'JetBrains Mono',
+              color: 'var(--text-dim)', maxHeight: 400, overflow: 'auto',
+              whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+              lineHeight: 1.6
+            }}>
+              {preview.html}
+            </pre>
+          ) : (
+            <div className="preview-frame" style={{ marginBottom: 16 }}>
+              <iframe
+                srcDoc={preview.html}
+                style={{ width: '100%', height: 420, border: 'none' }}
+                title="Preview"
+              />
+            </div>
+          )}
+
+          {/* Action buttons */}
+          <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+            <button className="btn btn-primary" onClick={onDownload}>
+              📥 Download HTML
+            </button>
+            <button className="btn btn-ghost" onClick={() => {
+              navigator.clipboard.writeText(preview.html);
+            }}>
+              📋 Copy HTML
+            </button>
+          </div>
+
+          {/* GetResponse Integration */}
+          {grConnected && (
+            <div style={{
+              marginTop: 24, paddingTop: 24,
+              borderTop: '1px solid var(--border)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent-green)' }} />
+                <h4 style={{ fontSize: 15, fontWeight: 700 }}>Send via GetResponse</h4>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 16 }}>
+                <div>
+                  <label>Campaign (List)</label>
+                  <select value={sendConfig.campaignId}
+                    onChange={e => setSendConfig({...sendConfig, campaignId: e.target.value})}>
+                    <option value="">Select campaign...</option>
+                    {campaigns.map(c => (
+                      <option key={c.campaignId} value={c.campaignId}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label>From Field</label>
+                  <select value={sendConfig.fromFieldId}
+                    onChange={e => setSendConfig({...sendConfig, fromFieldId: e.target.value})}>
+                    <option value="">Select from field...</option>
+                    {fromFields.map(f => (
+                      <option key={f.fromFieldId} value={f.fromFieldId}>
+                        {f.name} &lt;{f.email}&gt;
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label>Send Mode</label>
+                  <select value={sendConfig.sendMode}
+                    onChange={e => setSendConfig({...sendConfig, sendMode: e.target.value})}>
+                    <option value="draft">💾 Save as Draft</option>
+                    <option value="now">🚀 Send Immediately</option>
+                    <option value="schedule">📅 Schedule</option>
+                  </select>
+                </div>
+                {sendConfig.sendMode === 'schedule' && (
+                  <div>
+                    <label>Schedule Date/Time</label>
+                    <input type="datetime-local" value={sendConfig.scheduleDate}
+                      onChange={e => setSendConfig({...sendConfig, scheduleDate: e.target.value})} />
+                  </div>
+                )}
+              </div>
+
+              {/* Multi-campaign selector */}
+              {sendConfig.sendMode !== 'draft' && campaigns.length > 1 && (
+                <div style={{ marginBottom: 16 }}>
+                  <label>Send to campaigns (select multiple)</label>
+                  <div style={{ maxHeight: 150, overflow: 'auto', background: 'var(--bg)', borderRadius: 'var(--radius)', padding: 8 }}>
+                    {campaigns.map(c => (
+                      <label key={c.campaignId} style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        padding: '6px 8px', cursor: 'pointer', borderRadius: 6,
+                        marginBottom: 0, fontSize: 13
+                      }}>
+                        <input type="checkbox" className="checkbox-custom"
+                          checked={sendConfig.selectedCampaigns.includes(c.campaignId)}
+                          onChange={e => {
+                            const list = e.target.checked
+                              ? [...sendConfig.selectedCampaigns, c.campaignId]
+                              : sendConfig.selectedCampaigns.filter(id => id !== c.campaignId);
+                            setSendConfig({...sendConfig, selectedCampaigns: list});
+                          }} />
+                        <span>{c.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <button
+                className={`btn ${sendConfig.sendMode === 'draft' ? 'btn-orange' : 'btn-green'}`}
+                style={{ width: '100%', justifyContent: 'center' }}
+                disabled={!sendConfig.campaignId || !sendConfig.fromFieldId || sending}
+                onClick={onSendGR}
+              >
+                {sending ? (
+                  <><div className="spinner" /> Processing...</>
+                ) : sendConfig.sendMode === 'draft' ? (
+                  '💾 Save Draft to GetResponse'
+                ) : sendConfig.sendMode === 'now' ? (
+                  '🚀 Send Newsletter NOW'
+                ) : (
+                  '📅 Schedule Newsletter'
+                )}
+              </button>
+
+              {sendConfig.sendMode === 'now' && (
+                <p style={{ fontSize: 11, color: 'var(--accent-orange)', marginTop: 8, textAlign: 'center' }}>
+                  ⚠️ This will immediately send to all subscribers in selected campaign(s)
+                </p>
+              )}
+            </div>
+          )}
+
+          {!grConnected && (
+            <div style={{
+              marginTop: 24, paddingTop: 24,
+              borderTop: '1px solid var(--border)',
+              textAlign: 'center'
+            }}>
+              <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                Connect your GetResponse API key in Settings to send directly from here
+              </p>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ==================== EMAIL HTML GENERATORS ====================
+    function isToday(dateString) {
+      const today = new Date();
+      const checkDate = new Date(dateString);
+      return today.toDateString() === checkDate.toDateString();
+    }
+
+    function generateMultiFreeTankHTML(tanks) {
+      const tanksHTML = tanks.map(tank => {
+        const tankDate = new Date(tank.date);
+        const isTodayDate = isToday(tank.date);
+        const formattedDate = tankDate.toLocaleDateString('en-GB', {day: '2-digit', month: '2-digit'}).replace(/\//g, '.');
+        const dayName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][tankDate.getDay()];
+        const dateLabel = isTodayDate ? 'TODAY' : formattedDate;
+
+        let destText = '';
+        if (tank.destination === 'ALL_EU') destText = '🇪🇺 ALL EU';
+        else if (tank.destination === 'CUSTOM') {
+          const codes = tank.customDestinations.split(',').map(c => c.trim()).filter(c => c);
+          destText = codes.map(code => `${code} - ${COUNTRY_NAMES[code] || code}`).join(', ');
+        } else destText = `${tank.destination} - ${COUNTRY_NAMES[tank.destination]}`;
+
+        const locationText = tank.postalCode ? `${tank.postalCode} ${tank.location}` : tank.location;
+
+        return `<tr bgcolor="#f8f9fa">
+  <td style="padding:12px 8px;font-size:13px;"><b>${locationText}</b><br><small style="color:#666;">${tank.country}</small></td>
+  <td style="padding:12px 8px;font-size:13px;"><b style="color:#d32f2f;">${dateLabel}</b><br><span style="font-size:11px;">${dayName} ${formattedDate}</span></td>
+  <td style="padding:12px 8px;font-size:13px;"><b>${destText}</b></td>
+  <td style="padding:12px 8px;font-size:12px;">
+    <span style="color:${tank.adr ? '#c62828' : '#2e7d32'};font-weight:bold;">${tank.adr ? '🔴 ADR' : 'NO ADR'}</span><br>
+    <span style="font-size:11px;">${tank.tankType}</span>
+  </td>
+</tr>`;
+      }).join('\n');
+
+      return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background-color:#f5f5f5;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f5f5f5">
+<tr><td align="center" style="padding:10px 0;">
+<table width="100%" style="max-width:750px;margin:0 auto;" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff">
+<tr><td bgcolor="#1b5e20" style="padding:20px 15px;text-align:center;">
+  <h1 style="margin:0;color:#ffffff;font-size:24px;">ROUTE11</h1>
+  <p style="margin:5px 0 0 0;color:#a5d6a7;font-size:15px;font-weight:bold;">🟢 ${tanks.length} FREE TANK${tanks.length > 1 ? 'S' : ''} AVAILABLE</p>
+</td></tr>
+<tr><td height="15"></td></tr>
+<tr><td style="padding:0 15px;">
+<table width="100%" cellpadding="0" cellspacing="0" border="1" bordercolor="#dee2e6" style="border-collapse:collapse;">
+<tr bgcolor="#2e7d32">
+  <td width="25%" style="padding:8px 6px;color:#ffffff;font-size:11px;font-weight:bold;">LOCATION</td>
+  <td width="25%" style="padding:8px 6px;color:#ffffff;font-size:11px;font-weight:bold;">AVAILABLE</td>
+  <td width="25%" style="padding:8px 6px;color:#ffffff;font-size:11px;font-weight:bold;">DESTINATION</td>
+  <td width="25%" style="padding:8px 6px;color:#ffffff;font-size:11px;font-weight:bold;">DETAILS</td>
+</tr>
+${tanksHTML}
+</table>
+</td></tr>
+<tr><td height="15"></td></tr>
+<tr><td style="padding:15px 15px 5px 15px;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0">
+<tr><td style="text-align:center;padding:20px;border:3px dashed #ff6f00;border-radius:12px;background-color:#fff8e1;">
+<p style="margin:0 0 4px 0;font-size:15px;color:#e65100;font-weight:bold;">👆 NEED A LOAD NEAR YOUR TRUCK?</p>
+<p style="margin:0 0 12px 0;font-size:13px;color:#795548;">Search by city, radius, date, ADR & tank type</p>
+<table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
+<tr><td bgcolor="#ff6f00" style="border-radius:8px;padding:0;">
+<a href="https://loads.route11.eu" target="_blank" style="display:inline-block;padding:15px 45px;color:#ffffff;font-size:18px;font-weight:bold;text-decoration:none;">👉 CLICK HERE TO FIND LOADS →</a>
+</td></tr></table>
+<p style="margin:10px 0 0 0;font-size:11px;color:#9e9e9e;">Updated daily • <b>loads.route11.eu</b></p>
+</td></tr></table>
+</td></tr>
+<tr><td height="15"></td></tr>
+<tr><td bgcolor="#1b5e20" style="padding:18px 15px;text-align:center;">
+  <p style="margin:0 0 8px 0;color:#ffffff;font-size:17px;font-weight:bold;">📞 Book NOW</p>
+  <p style="margin:0;color:#c8e6c9;font-size:13px;">
+    📧 <b style="color:#ffffff;">office@route11.eu</b> · 💬 <b style="color:#ffffff;">+48 889 379 687</b>
+  </p>
+</td></tr>
+<tr><td bgcolor="#37474f" style="padding:10px 15px;text-align:center;">
+  <p style="margin:0;color:#b0bec5;font-size:10px;"><b>ROUTE11</b> · Tank Transport Solutions · office@route11.eu</p>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body></html>`;
+    }
+
+    function generateMultiRouteHTML(routes) {
+      const routesHTML = routes.map(route => {
+        const routeDate = new Date(route.date);
+        const isTodayDate = isToday(route.date);
+        const formattedDate = routeDate.toLocaleDateString('en-GB', {day: '2-digit', month: '2-digit'}).replace(/\//g, '.');
+        const dayName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][routeDate.getDay()];
+        const dateLabel = isTodayDate ? 'TODAY' : formattedDate;
+        const loadingText = route.loadingPostal ? `${route.loadingPostal} ${route.loadingCity}` : route.loadingCity;
+        const unloadingText = route.unloadingPostal ? `${route.unloadingPostal} ${route.unloadingCity}` : route.unloadingCity;
+        const details = [];
+        if (route.notes) details.push(route.notes);
+        details.push(route.adr ? '<b style="color:#c62828;">ADR</b>' : 'NO ADR');
+        details.push(route.tankType);
+
+        return `<tr bgcolor="#f8f9fa">
+  <td style="padding:12px 8px;font-size:13px;"><b>${loadingText}</b><br><small style="color:#666;">${route.loadingCountry}</small></td>
+  <td style="padding:12px 8px;font-size:13px;"><b>${unloadingText}</b><br><small style="color:#666;">${route.unloadingCountry}</small></td>
+  <td style="padding:12px 8px;font-size:13px;"><b style="color:#d32f2f;">${dateLabel}</b><br><span style="font-size:11px;">${dayName} ${formattedDate}</span></td>
+  <td style="padding:12px 8px;font-size:12px;">${details.join(' • ')}</td>
+</tr>`;
+      }).join('\n');
+
+      return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background-color:#f5f5f5;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f5f5f5">
+<tr><td align="center" style="padding:10px 0;">
+<table width="100%" style="max-width:750px;margin:0 auto;" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff">
+<tr><td bgcolor="#d32f2f" style="padding:20px 15px;text-align:center;">
+  <h1 style="margin:0;color:#ffffff;font-size:24px;">ROUTE11</h1>
+  <p style="margin:5px 0 0 0;color:#ffcdd2;font-size:15px;font-weight:bold;">🔴 ${routes.length} AVAILABLE ROUTE${routes.length > 1 ? 'S' : ''}</p>
+</td></tr>
+<tr><td height="15"></td></tr>
+<tr><td style="padding:0 15px;">
+<table width="100%" cellpadding="0" cellspacing="0" border="1" bordercolor="#dee2e6" style="border-collapse:collapse;">
+<tr bgcolor="#d32f2f">
+  <td width="25%" style="padding:8px 6px;color:#ffffff;font-size:11px;font-weight:bold;">LOADING</td>
+  <td width="25%" style="padding:8px 6px;color:#ffffff;font-size:11px;font-weight:bold;">UNLOADING</td>
+  <td width="20%" style="padding:8px 6px;color:#ffffff;font-size:11px;font-weight:bold;">DATE</td>
+  <td width="30%" style="padding:8px 6px;color:#ffffff;font-size:11px;font-weight:bold;">DETAILS</td>
+</tr>
+${routesHTML}
+</table>
+</td></tr>
+<tr><td height="15"></td></tr>
+<tr><td style="padding:15px 15px 5px 15px;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0">
+<tr><td style="text-align:center;padding:20px;border:3px dashed #ff6f00;border-radius:12px;background-color:#fff8e1;">
+<p style="margin:0 0 4px 0;font-size:15px;color:#e65100;font-weight:bold;">👆 NEED A LOAD NEAR YOUR TRUCK?</p>
+<p style="margin:0 0 12px 0;font-size:13px;color:#795548;">Search by city, radius, date, ADR & tank type</p>
+<table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
+<tr><td bgcolor="#ff6f00" style="border-radius:8px;padding:0;">
+<a href="https://loads.route11.eu" target="_blank" style="display:inline-block;padding:15px 45px;color:#ffffff;font-size:18px;font-weight:bold;text-decoration:none;">👉 CLICK HERE TO FIND LOADS →</a>
+</td></tr></table>
+<p style="margin:10px 0 0 0;font-size:11px;color:#9e9e9e;">Updated daily • <b>loads.route11.eu</b></p>
+</td></tr></table>
+</td></tr>
+<tr><td height="15"></td></tr>
+<tr><td bgcolor="#d32f2f" style="padding:18px 15px;text-align:center;">
+  <p style="margin:0 0 8px 0;color:#ffffff;font-size:17px;font-weight:bold;">📞 Book NOW</p>
+  <p style="margin:0;color:#ffcdd2;font-size:13px;">
+    📧 <b style="color:#ffffff;">office@route11.eu</b> · 💬 <b style="color:#ffffff;">+48 889 379 687</b>
+  </p>
+</td></tr>
+<tr><td bgcolor="#37474f" style="padding:10px 15px;text-align:center;">
+  <p style="margin:0;color:#b0bec5;font-size:10px;"><b>ROUTE11</b> · Tank Transport Solutions · office@route11.eu</p>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body></html>`;
+    }
+
+    function generateSubject(tanks) {
+      if (tanks.length === 1) {
+        const t = tanks[0];
+        const adrText = t.adr ? 'ADR' : 'NO ADR';
+        const loc = t.postalCode ? `${t.location} ${t.postalCode}` : t.location;
+        return `🟢 FREE TANK · ${loc} ${t.country} · ${isToday(t.date) ? 'TODAY' : t.date} · ${adrText}`;
+      }
+      return `🟢 ${tanks.length} FREE TANKS · Multiple Locations`;
+    }
+
+    function generatePreheader(tanks) {
+      if (tanks.length === 1) {
+        const t = tanks[0];
+        const dest = t.destination === 'ALL_EU' ? 'EU' : t.destination;
+        return `Wolna cysterna ${t.location} → ${dest}. ${t.adr ? 'ADR.' : 'NO ADR.'} Rezerwuj teraz!`;
+      }
+      return `${tanks.length} wolne cysterny dostępne. Sprawdź lokalizacje i rezerwuj!`;
+    }
+
+    function generateInternalName(tanks) {
+      const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
+      if (tanks.length === 1) return `FREE_TANK_${tanks[0].location}_${tanks[0].country}_${date}`;
+      return `FREE_TANKS_${tanks.length}_${date}`;
+    }
+
+    function generateRouteSubject(routes) {
+      if (routes.length === 1) {
+        const r = routes[0];
+        const adrText = r.adr ? 'ADR' : 'NO ADR';
+        return `🔴 ROUTE · ${r.loadingCity} ${r.loadingCountry} → ${r.unloadingCity} ${r.unloadingCountry} · ${isToday(r.date) ? 'TODAY' : r.date} · ${adrText}`;
+      }
+      return `🔴 ${routes.length} AVAILABLE ROUTES · Multiple Directions`;
+    }
+
+    function generateRoutePreheader(routes) {
+      if (routes.length === 1) {
+        const r = routes[0];
+        return `Dostępny ładunek ${r.loadingCity} → ${r.unloadingCity}. ${r.adr ? 'ADR.' : 'NO ADR.'} Rezerwuj teraz!`;
+      }
+      return `${routes.length} dostępne trasy. Sprawdź kierunki i rezerwuj!`;
+    }
+
+    function generateRouteInternalName(routes) {
+      const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
+      if (routes.length === 1) return `ROUTE_${routes[0].loadingCity}_${routes[0].unloadingCity}_${date}`;
+      return `ROUTES_${routes.length}_${date}`;
+    }
+
+    // ==================== RENDER ====================
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>

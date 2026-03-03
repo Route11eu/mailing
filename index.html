@@ -854,16 +854,16 @@
         setPreview({ html, subject, preheader, internalName });
       };
 
-      const handleSendGR = async () => {
-        if (!grApi || !preview) return;
+      const handleSendGR = async (editedPreview) => {
+        if (!grApi) return; const prev = editedPreview || preview;
         setSending(true);
         try {
           const payload = {
-            name: preview.internalName,
+            name: prev.internalName,
             type: sendConfig.sendMode === 'draft' ? 'draft' : 'broadcast',
-            subject: preview.subject,
+            subject: prev.subject,
             fromField: { fromFieldId: sendConfig.fromFieldId },
-            content: { html: preview.html },
+            content: { html: prev.html },
             campaign: { campaignId: sendConfig.campaignId }
           };
 
@@ -1046,16 +1046,16 @@
         setPreview({ html, subject, preheader, internalName });
       };
 
-      const handleSendGR = async () => {
-        if (!grApi || !preview) return;
+      const handleSendGR = async (editedPreview) => {
+        if (!grApi) return; const prev = editedPreview || preview;
         setSending(true);
         try {
           const payload = {
-            name: preview.internalName,
+            name: prev.internalName,
             type: sendConfig.sendMode === 'draft' ? 'draft' : 'broadcast',
-            subject: preview.subject,
+            subject: prev.subject,
             fromField: { fromFieldId: sendConfig.fromFieldId },
-            content: { html: preview.html },
+            content: { html: prev.html },
             campaign: { campaignId: sendConfig.campaignId }
           };
 
@@ -1217,15 +1217,29 @@
     // ==================== PREVIEW + GETRESPONSE SEND SECTION ====================
     function PreviewSection({ preview, onDownload, onSendGR, grConnected, campaigns, fromFields, sendConfig, setSendConfig, sending, color }) {
       const [showSource, setShowSource] = useState(false);
+      const [editSubject, setEditSubject] = useState(preview.subject);
+      const [editPreheader, setEditPreheader] = useState(preview.preheader);
+      const [editName, setEditName] = useState(preview.internalName);
 
-      const copySubject = () => {
-        navigator.clipboard.writeText(preview.subject);
-      };
+      // Sync when preview changes (new generation)
+      useEffect(() => {
+        setEditSubject(preview.subject);
+        setEditPreheader(preview.preheader);
+        setEditName(preview.internalName);
+      }, [preview.subject, preview.preheader, preview.internalName]);
+
+      // Expose edited values for sending
+      const getEditedPreview = () => ({
+        ...preview,
+        subject: editSubject,
+        preheader: editPreheader,
+        internalName: editName
+      });
 
       return (
         <div className="card slide-up" style={{ marginTop: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-            <h3 style={{ fontSize: 18, fontWeight: 700 }}>Preview</h3>
+            <h3 style={{ fontSize: 18, fontWeight: 700 }}>Preview & Send</h3>
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn btn-ghost" style={{ padding: '6px 14px', fontSize: 12 }}
                 onClick={() => setShowSource(!showSource)}>
@@ -1234,26 +1248,41 @@
             </div>
           </div>
 
-          {/* Metadata */}
+          {/* Editable Metadata */}
           <div style={{
             background: 'var(--bg)', borderRadius: 'var(--radius)',
             padding: 16, marginBottom: 16
           }}>
-            <div style={{ display: 'grid', gap: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 80, flexShrink: 0, textTransform: 'uppercase' }}>Subject</span>
-                <code style={{ fontSize: 12, color: 'var(--text)', fontFamily: 'JetBrains Mono', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {preview.subject}
-                </code>
-                <button onClick={copySubject} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: '2px 6px' }} title="Copy">📋</button>
+            <div style={{ display: 'grid', gap: 12 }}>
+              <div>
+                <label>Internal Name (nazwa wewnętrzna)</label>
+                <input
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  placeholder="Np. FREE_TANK_Oswiecim_PL_20260303"
+                  style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }}
+                />
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 80, flexShrink: 0, textTransform: 'uppercase' }}>Preheader</span>
-                <code style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'JetBrains Mono' }}>{preview.preheader}</code>
+              <div>
+                <label>Subject (tytuł wiadomości)</label>
+                <input
+                  value={editSubject}
+                  onChange={e => setEditSubject(e.target.value)}
+                  placeholder="Np. 🟢 FREE TANK · Oświęcim PL · TODAY"
+                  style={{ fontSize: 14 }}
+                />
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 80, flexShrink: 0, textTransform: 'uppercase' }}>Name</span>
-                <code style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'JetBrains Mono' }}>{preview.internalName}</code>
+              <div>
+                <label>Preheader (podpowiedź wiadomości)</label>
+                <input
+                  value={editPreheader}
+                  onChange={e => setEditPreheader(e.target.value)}
+                  placeholder="Krótki tekst widoczny obok tematu w skrzynce"
+                  style={{ fontSize: 13, color: 'var(--text-dim)' }}
+                />
+                <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                  Tekst widoczny obok Subject w podglądzie maila (Gmail, Outlook)
+                </p>
               </div>
             </div>
           </div>
@@ -1281,13 +1310,24 @@
 
           {/* Action buttons */}
           <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
-            <button className="btn btn-primary" onClick={onDownload}>
+            <button className="btn btn-primary" onClick={() => {
+              const blob = new Blob([preview.html], { type: 'text/html' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url; a.download = `${editName}.html`; a.click();
+              URL.revokeObjectURL(url);
+            }}>
               📥 Download HTML
             </button>
             <button className="btn btn-ghost" onClick={() => {
               navigator.clipboard.writeText(preview.html);
             }}>
               📋 Copy HTML
+            </button>
+            <button className="btn btn-ghost" onClick={() => {
+              navigator.clipboard.writeText(editSubject);
+            }}>
+              📋 Copy Subject
             </button>
           </div>
 
@@ -1373,7 +1413,7 @@
                 className={`btn ${sendConfig.sendMode === 'draft' ? 'btn-orange' : 'btn-green'}`}
                 style={{ width: '100%', justifyContent: 'center' }}
                 disabled={!sendConfig.campaignId || !sendConfig.fromFieldId || sending}
-                onClick={onSendGR}
+                onClick={() => onSendGR(getEditedPreview())}
               >
                 {sending ? (
                   <><div className="spinner" /> Processing...</>

@@ -626,7 +626,7 @@
     function App() {
       const [authenticated, setAuthenticated] = useState(false);
       const [apiKey, setApiKey] = useState(() => {
-        try { return sessionStorage.getItem('gr_api_key') || ''; } catch { return ''; }
+        try { return localStorage.getItem('gr_api_key') || ''; } catch { return ''; }
       });
       const [grApi, setGrApi] = useState(null);
       const { toasts, addToast, removeToast } = useToast();
@@ -649,7 +649,7 @@
       useEffect(() => {
         if (apiKey) {
           setGrApi(new GetResponseAPI(apiKey));
-          try { sessionStorage.setItem('gr_api_key', apiKey); } catch { }
+          try { localStorage.setItem('gr_api_key', apiKey); } catch { }
         }
       }, [apiKey]);
 

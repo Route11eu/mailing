@@ -1332,19 +1332,48 @@
                       <div>
                         <label>Kiedy</label>
                         <select
-                          value={parsedData?.send_options?.send_when || 'now'}
+                          value={parsedData?.send_options?.send_when === 'now' || !parsedData?.send_options?.send_when ? 'now' : 'schedule'}
+                          onChange={e => {
+                            if (e.target.value === 'now') {
+                              setParsedData(prev => ({
+                                ...prev,
+                                send_options: { ...prev.send_options, send_when: 'now' }
+                              }));
+                            } else {
+                              // Default to +1 hour
+                              const d = new Date(Date.now() + 3600000);
+                              const iso = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') + 'T' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+                              setParsedData(prev => ({
+                                ...prev,
+                                send_options: { ...prev.send_options, send_when: iso }
+                              }));
+                            }
+                          }}
+                        >
+                          <option value="now">⚡ Wyślij teraz</option>
+                          <option value="schedule">📅 Zaplanuj wysyłkę</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Datetime picker — shown when scheduled */}
+                    {parsedData?.send_options?.send_when && parsedData.send_options.send_when !== 'now' && (
+                      <div style={{ marginBottom: 16 }}>
+                        <label>📅 Data i godzina wysyłki</label>
+                        <input
+                          type="datetime-local"
+                          value={parsedData.send_options.send_when}
                           onChange={e => setParsedData(prev => ({
                             ...prev,
                             send_options: { ...prev.send_options, send_when: e.target.value }
                           }))}
-                        >
-                          <option value="now">⚡ Wyślij teraz</option>
-                          <option value="13:00">🕐 O 13:00</option>
-                          <option value="15:00">🕐 O 15:00</option>
-                          <option value="09:00">🕐 Jutro o 9:00</option>
-                        </select>
+                          style={{ width: '100%', fontSize: 14, padding: '10px 12px' }}
+                        />
+                        <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 0' }}>
+                          Strefa: Europe/Warsaw
+                        </p>
                       </div>
-                    </div>
+                    )}
 
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button className="btn btn-green" onClick={handleSendNewsletter} disabled={loading} style={{ flex: 1 }}>

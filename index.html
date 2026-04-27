@@ -905,39 +905,133 @@
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
       }, [messages]);
 
-      // Voice recognition
-      const startVoice = () => {
-        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-          addToast('Voice not supported in this browser. Use Chrome.', 'error');
+      // Voice: MediaRecorder → Gemini Audio
+      const mediaRecorderRef = useRef(null);
+      const audioChunksRef = useRef([]);
+      const recordingTimerRef = useRef(null);
+      const [recordingTime, setRecordingTime] = useState(0);
+
+      const startVoice = async () => {
+        if (isRecording) {
+          // Stop recording
+          if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+            mediaRecorderRef.current.stop();
+          }
           return;
         }
-        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-        const recognition = new SR();
-        recognition.lang = 'pl-PL';
-        recognition.continuous = false;
-        recognition.interimResults = false;
-        recognition.maxAlternatives = 1;
 
-        recognition.onresult = (e) => {
-          const transcript = e.results[0][0].transcript;
-          setInput(prev => prev ? prev + ' ' + transcript : transcript);
-          setIsRecording(false);
-        };
-        recognition.onerror = (e) => {
-          addToast('Voice error: ' + e.error, 'error');
-          setIsRecording(false);
-        };
-        recognition.onend = () => setIsRecording(false);
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+            ? 'audio/webm;codecs=opus'
+            : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/ogg';
 
-        setIsRecording(true);
-        recognition.start();
+          const recorder = new MediaRecorder(stream, { mimeType });
+          mediaRecorderRef.current = recorder;
+          audioChunksRef.current = [];
+          setRecordingTime(0);
+
+          recorder.ondataavailable = (e) => {
+            if (e.data.size > 0) audioChunksRef.current.push(e.data);
+          };
+
+          recorder.onstop = async () => {
+            clearInterval(recordingTimerRef.current);
+            stream.getTracks().forEach(t => t.stop());
+            setIsRecording(false);
+            setRecordingTime(0);
+
+            const blob = new Blob(audioChunksRef.current, { type: mimeType });
+            if (blob.size < 1000) {
+              addToast('Nagranie za krótkie. Spróbuj ponownie.', 'error');
+              return;
+            }
+
+            // Convert to base64
+            const reader = new FileReader();
+            reader.onloadend = async () => {
+              const base64 = reader.result.split(',')[1];
+              setLoading(true);
+
+              // Add recording message
+              const userMsg = { role: 'user', text: '🎤 Nagranie głosowe (' + (blob.size / 1024).toFixed(0) + ' KB)', ts: Date.now() };
+              setMessages(prev => [...prev, userMsg]);
+
+              try {
+                const context = messages.map(m => m.role + ': ' + m.text).join('\n');
+                const result = await callGAS_POST('smartMailParseAudio', {
+                  audio: base64,
+                  mimeType: mimeType,
+                  context: context
+                });
+
+                if (result.success && result.result) {
+                  const r = result.result;
+                  setParsedData(r);
+
+                  // Show transcription
+                  const transcription = result.transcription || r.transcription || '';
+                  let aiText = '';
+                  if (transcription) {
+                    aiText += '📝 Transkrypcja: "' + transcription + '"\n\n';
+                  }
+
+                  if (r.complete) {
+                    const previewResult = await callGAS('smartMailPreview', r);
+                    if (previewResult.success) {
+                      setPreviewHtml(previewResult.html);
+                      setStep('preview');
+                    }
+                    aiText += '✅ ' + r.summary + '\n\nPodgląd mailingu jest gotowy.';
+                  } else {
+                    aiText += r.question || 'Potrzebuję więcej informacji.';
+                  }
+
+                  setMessages(prev => [...prev, { role: 'ai', text: aiText, data: r, ts: Date.now() }]);
+                } else {
+                  setMessages(prev => [...prev, { role: 'ai', text: '❌ ' + (result.error || 'Błąd'), ts: Date.now() }]);
+                }
+              } catch (err) {
+                setMessages(prev => [...prev, { role: 'ai', text: '❌ Błąd: ' + err.message, ts: Date.now() }]);
+              }
+              setLoading(false);
+            };
+            reader.readAsDataURL(blob);
+          };
+
+          recorder.start(250); // collect chunks every 250ms
+          setIsRecording(true);
+
+          // Timer
+          recordingTimerRef.current = setInterval(() => {
+            setRecordingTime(t => t + 1);
+          }, 1000);
+
+        } catch (err) {
+          addToast('Brak dostępu do mikrofonu: ' + err.message, 'error');
+        }
       };
 
-      // API call to GAS
+      // API call via GET (small payloads)
       const callGAS = async (action, payload) => {
         const url = GAS_SM_URL + '?action=' + action + '&secret=' + SM_SECRET
           + '&payload=' + encodeURIComponent(JSON.stringify(payload));
         const res = await fetch(url, { redirect: 'follow' });
+        return res.json();
+      };
+
+      // API call via POST (large payloads like audio)
+      const callGAS_POST = async (action, payload) => {
+        const res = await fetch(GAS_SM_URL, {
+          method: 'POST',
+          redirect: 'follow',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({
+            action: action,
+            secret: SM_SECRET,
+            ...payload
+          })
+        });
         return res.json();
       };
 
@@ -1128,16 +1222,21 @@
                   <button
                     className="btn"
                     onClick={startVoice}
-                    disabled={loading || isRecording}
+                    disabled={loading}
                     style={{
-                      padding: '10px 12px', borderRadius: '50%', fontSize: 18,
+                      padding: isRecording ? '6px 12px' : '10px 12px',
+                      borderRadius: isRecording ? '20px' : '50%',
+                      fontSize: isRecording ? 13 : 18,
                       background: isRecording ? 'var(--accent-red)' : 'var(--bg)',
+                      color: isRecording ? 'white' : 'inherit',
                       border: '1px solid var(--border)', cursor: 'pointer',
-                      animation: isRecording ? 'pulse 1s infinite' : 'none'
+                      animation: isRecording ? 'pulse 1s infinite' : 'none',
+                      minWidth: isRecording ? 80 : 'auto',
+                      fontWeight: 600
                     }}
-                    title="Nagraj głosówkę"
+                    title={isRecording ? 'Kliknij żeby zakończyć' : 'Nagraj głosówkę'}
                   >
-                    🎤
+                    {isRecording ? '⏹ ' + recordingTime + 's' : '🎤'}
                   </button>
                   <button
                     className="btn btn-primary"

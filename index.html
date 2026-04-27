@@ -1207,47 +1207,77 @@
               </div>
 
               {/* Input */}
-              <div style={{ display: 'flex', gap: 8 }}>
-                <textarea
-                  ref={inputRef}
-                  value={input}
-                  onChange={e => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Opisz wolne auto lub ładunek... (Enter = wyślij)"
-                  rows={2}
-                  style={{ resize: 'none', flex: 1, fontSize: 14 }}
-                  disabled={loading || step === 'sending'}
-                />
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <button
-                    className="btn"
-                    onClick={startVoice}
-                    disabled={loading}
-                    style={{
-                      padding: isRecording ? '6px 12px' : '10px 12px',
-                      borderRadius: isRecording ? '20px' : '50%',
-                      fontSize: isRecording ? 13 : 18,
-                      background: isRecording ? 'var(--accent-red)' : 'var(--bg)',
-                      color: isRecording ? 'white' : 'inherit',
-                      border: '1px solid var(--border)', cursor: 'pointer',
-                      animation: isRecording ? 'pulse 1s infinite' : 'none',
-                      minWidth: isRecording ? 80 : 'auto',
-                      fontWeight: 600
-                    }}
-                    title={isRecording ? 'Kliknij żeby zakończyć' : 'Nagraj głosówkę'}
-                  >
-                    {isRecording ? '⏹ ' + recordingTime + 's' : '🎤'}
-                  </button>
+              {!isRecording && (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <textarea
+                    ref={inputRef}
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Wpisz opis lub kliknij mikrofon poniżej..."
+                    rows={2}
+                    style={{ resize: 'none', flex: 1, fontSize: 14 }}
+                    disabled={loading || step === 'sending'}
+                  />
                   <button
                     className="btn btn-primary"
                     onClick={handleSend}
                     disabled={loading || !input.trim()}
-                    style={{ padding: '10px 12px', borderRadius: '50%', fontSize: 14 }}
+                    style={{ padding: '10px 16px', borderRadius: 'var(--radius)', fontSize: 14, alignSelf: 'stretch' }}
                   >
                     ➤
                   </button>
                 </div>
+              )}
+
+              {/* Mic button — always visible, prominent */}
+              <div style={{ display: 'flex', justifyContent: 'center', paddingTop: isRecording ? 0 : 12 }}>
+                <button
+                  onClick={startVoice}
+                  disabled={loading}
+                  style={{
+                    width: isRecording ? 100 : 56,
+                    height: isRecording ? 100 : 56,
+                    borderRadius: '50%',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: isRecording ? 16 : 24,
+                    fontWeight: 700,
+                    color: 'white',
+                    background: isRecording
+                      ? 'linear-gradient(135deg, #ef4444, #dc2626)'
+                      : 'linear-gradient(135deg, #3b82f6, #6366f1)',
+                    boxShadow: isRecording
+                      ? '0 0 0 8px rgba(239,68,68,0.2), 0 0 0 16px rgba(239,68,68,0.1), 0 4px 20px rgba(239,68,68,0.4)'
+                      : '0 4px 16px rgba(59,130,246,0.4)',
+                    transition: 'all 0.3s ease',
+                    animation: isRecording ? 'pulse 1.2s infinite' : 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'column',
+                    gap: 2
+                  }}
+                  title={isRecording ? 'Kliknij żeby zakończyć nagrywanie' : 'Nagraj głosówkę'}
+                >
+                  {isRecording ? (
+                    <>
+                      <span style={{ fontSize: 20 }}>⏹</span>
+                      <span style={{ fontSize: 11 }}>{recordingTime}s</span>
+                    </>
+                  ) : '🎤'}
+                </button>
               </div>
+              {!isRecording && !loading && (
+                <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 11, margin: '4px 0 0' }}>
+                  Kliknij mikrofon i powiedz np. <i>"Wolne auto Warszawa, destynacja UE, bez ADR"</i>
+                </p>
+              )}
+              {isRecording && (
+                <p style={{ textAlign: 'center', color: '#f87171', fontSize: 13, fontWeight: 600, margin: '8px 0 0' }}>
+                  🔴 Nagrywam... Kliknij ⏹ żeby zakończyć
+                </p>
+              )}
             </div>
 
             {/* RIGHT: Preview + Send */}

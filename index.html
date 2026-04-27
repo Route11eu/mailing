@@ -762,7 +762,7 @@
 
     // ==================== MAIN APP LAYOUT ====================
     function MainApp({ apiKey, setApiKey, grApi, addToast, onLogout }) {
-      const [activeTab, setActiveTab] = useState('generator');
+      const [activeTab, setActiveTab] = useState('smart');
       const [grConnected, setGrConnected] = useState(false);
       const [campaigns, setCampaigns] = useState([]);
       const [fromFields, setFromFields] = useState([]);
@@ -843,6 +843,9 @@
 
             {/* Tabs */}
             <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', gap: 4 }}>
+              <button className={`tab-btn ${activeTab === 'smart' ? 'active' : ''}`} onClick={() => setActiveTab('smart')}>
+                🤖 Smart Mailing
+              </button>
               <button className={`tab-btn ${activeTab === 'generator' ? 'active' : ''}`} onClick={() => setActiveTab('generator')}>
                 ✉️ Generator
               </button>
@@ -854,6 +857,9 @@
 
           {/* Content */}
           <main style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 24px 80px' }}>
+            {activeTab === 'smart' && (
+              <SmartMailing addToast={addToast} />
+            )}
             {activeTab === 'generator' && (
               <MailingGenerator
                 grApi={grApi}
@@ -875,6 +881,365 @@
               />
             )}
           </main>
+        </div>
+      );
+    }
+
+    // ==================== SMART MAILING ====================
+    const GAS_SM_URL = 'https://script.google.com/macros/s/AKfycbxc1oD62fJQT1K9mfxPfanW0Z2HMlfgPG30DoiJuHDFEXj_rv-f5wIUT0VDjfI7yY9Z/exec';
+    const SM_SECRET = 'R11Dashboard2026!';
+
+    function SmartMailing({ addToast }) {
+      const [messages, setMessages] = useState([]);
+      const [input, setInput] = useState('');
+      const [loading, setLoading] = useState(false);
+      const [parsedData, setParsedData] = useState(null);
+      const [previewHtml, setPreviewHtml] = useState('');
+      const [isRecording, setIsRecording] = useState(false);
+      const [step, setStep] = useState('input'); // input | preview | sending | done
+      const chatEndRef = useRef(null);
+      const inputRef = useRef(null);
+
+      // Scroll to bottom on new messages
+      useEffect(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, [messages]);
+
+      // Voice recognition
+      const startVoice = () => {
+        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+          addToast('Voice not supported in this browser. Use Chrome.', 'error');
+          return;
+        }
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SR();
+        recognition.lang = 'pl-PL';
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        recognition.onresult = (e) => {
+          const transcript = e.results[0][0].transcript;
+          setInput(prev => prev ? prev + ' ' + transcript : transcript);
+          setIsRecording(false);
+        };
+        recognition.onerror = (e) => {
+          addToast('Voice error: ' + e.error, 'error');
+          setIsRecording(false);
+        };
+        recognition.onend = () => setIsRecording(false);
+
+        setIsRecording(true);
+        recognition.start();
+      };
+
+      // API call to GAS
+      const callGAS = async (action, payload) => {
+        const url = GAS_SM_URL + '?action=' + action + '&secret=' + SM_SECRET
+          + '&payload=' + encodeURIComponent(JSON.stringify(payload));
+        const res = await fetch(url, { redirect: 'follow' });
+        return res.json();
+      };
+
+      // Send message
+      const handleSend = async () => {
+        const text = input.trim();
+        if (!text) return;
+
+        // Add user message
+        const userMsg = { role: 'user', text, ts: Date.now() };
+        setMessages(prev => [...prev, userMsg]);
+        setInput('');
+        setLoading(true);
+
+        try {
+          // Build context from previous messages
+          const context = messages.map(m => m.role + ': ' + m.text).join('\n');
+
+          const result = await callGAS('smartMailParse', { text, context });
+
+          if (result.success && result.result) {
+            const r = result.result;
+            setParsedData(r);
+
+            if (r.complete) {
+              // Generate preview
+              const previewResult = await callGAS('smartMailPreview', r);
+              if (previewResult.success) {
+                setPreviewHtml(previewResult.html);
+                setStep('preview');
+              }
+
+              const aiMsg = {
+                role: 'ai',
+                text: '✅ ' + r.summary + '\n\nPodgląd mailingu jest gotowy. Sprawdź po prawej stronie.',
+                data: r,
+                ts: Date.now()
+              };
+              setMessages(prev => [...prev, aiMsg]);
+            } else {
+              // AI needs more info
+              const aiMsg = {
+                role: 'ai',
+                text: r.question || 'Potrzebuję więcej informacji.',
+                data: r,
+                ts: Date.now()
+              };
+              setMessages(prev => [...prev, aiMsg]);
+            }
+          } else {
+            const errMsg = { role: 'ai', text: '❌ ' + (result.error || 'Błąd parsowania'), ts: Date.now() };
+            setMessages(prev => [...prev, errMsg]);
+          }
+        } catch (err) {
+          const errMsg = { role: 'ai', text: '❌ Błąd: ' + err.message, ts: Date.now() };
+          setMessages(prev => [...prev, errMsg]);
+        }
+        setLoading(false);
+      };
+
+      // Send newsletter
+      const handleSendNewsletter = async () => {
+        if (!parsedData) return;
+        setStep('sending');
+        setLoading(true);
+
+        try {
+          const result = await callGAS('smartMailSend', parsedData);
+          if (result.success) {
+            setStep('done');
+            addToast('✅ Newsletter wysłany! ID: ' + result.newsletterId, 'success');
+            const doneMsg = {
+              role: 'ai',
+              text: '🚀 Newsletter wysłany!\n\nNazwa: ' + result.name + '\nSubject: ' + result.subject + '\nID: ' + result.newsletterId,
+              ts: Date.now()
+            };
+            setMessages(prev => [...prev, doneMsg]);
+          } else {
+            setStep('preview');
+            addToast('❌ Wysyłka nie powiodła się: ' + result.error, 'error');
+          }
+        } catch (err) {
+          setStep('preview');
+          addToast('❌ Błąd: ' + err.message, 'error');
+        }
+        setLoading(false);
+      };
+
+      // Reset
+      const handleReset = () => {
+        setMessages([]);
+        setParsedData(null);
+        setPreviewHtml('');
+        setStep('input');
+        setInput('');
+      };
+
+      const handleKeyDown = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          handleSend();
+        }
+      };
+
+      return (
+        <div className="fade-in">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>🤖 Smart Mailing</h2>
+            <span className="badge badge-blue">AI-powered</span>
+            {step === 'done' && <span className="badge badge-green">✓ Wysłano</span>}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: step === 'preview' || step === 'done' ? '1fr 1fr' : '1fr', gap: 20 }}>
+
+            {/* LEFT: Chat */}
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', minHeight: 500 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>
+                💬 Opisz wolne auto lub ładunek
+              </div>
+
+              {/* Messages */}
+              <div style={{
+                flex: 1, overflowY: 'auto', marginBottom: 16,
+                display: 'flex', flexDirection: 'column', gap: 10
+              }}>
+                {messages.length === 0 && (
+                  <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: '40px 20px' }}>
+                    <div style={{ fontSize: 40, marginBottom: 16 }}>🚛</div>
+                    <p><b>Wpisz lub nagraj</b> opis wolnego auta / ładunku.</p>
+                    <p style={{ fontSize: 12, marginTop: 8 }}>
+                      Przykład: <i>"Wolne auto na dzisiaj w Warszawie, destynacja UE, bez ADR"</i>
+                    </p>
+                    <p style={{ fontSize: 12 }}>
+                      Przykład: <i>"Ładunek glikol, jutro z Płocka do Kłajpedy, MONO/MULTI"</i>
+                    </p>
+                  </div>
+                )}
+                {messages.map((msg, i) => (
+                  <div key={i} style={{
+                    alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                    maxWidth: '85%',
+                    padding: '10px 14px',
+                    borderRadius: msg.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+                    background: msg.role === 'user' ? 'var(--accent-blue)' : 'var(--bg)',
+                    color: msg.role === 'user' ? 'white' : 'var(--text)',
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                    border: msg.role === 'ai' ? '1px solid var(--border)' : 'none',
+                    whiteSpace: 'pre-wrap'
+                  }}>
+                    {msg.text}
+                    {msg.data && msg.data.data && (
+                      <div style={{
+                        marginTop: 8, padding: '8px 10px', borderRadius: 8,
+                        background: 'rgba(59,130,246,0.1)', fontSize: 11, fontFamily: 'JetBrains Mono, monospace'
+                      }}>
+                        {msg.data.type === 'FREE_TRUCK' ? '🚛' : '📦'} {msg.data.type}<br/>
+                        📍 {msg.data.data.city}, {msg.data.data.country} → {msg.data.data.destination}<br/>
+                        📅 {msg.data.data.date}<br/>
+                        {msg.data.data.adr === false ? '✅ NO ADR' : msg.data.data.adr === true ? '⚠️ ADR' : '❓ ADR?'}
+                        {msg.data.data.tank_type ? ' · ' + msg.data.data.tank_type : ''}
+                        {msg.data.data.product ? '\n📦 ' + msg.data.data.product : ''}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {loading && (
+                  <div style={{ alignSelf: 'flex-start', padding: '10px 14px', borderRadius: 14, background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                    <div className="spinner" style={{ width: 16, height: 16 }} />
+                  </div>
+                )}
+                <div ref={chatEndRef} />
+              </div>
+
+              {/* Input */}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <textarea
+                  ref={inputRef}
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Opisz wolne auto lub ładunek... (Enter = wyślij)"
+                  rows={2}
+                  style={{ resize: 'none', flex: 1, fontSize: 14 }}
+                  disabled={loading || step === 'sending'}
+                />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <button
+                    className="btn"
+                    onClick={startVoice}
+                    disabled={loading || isRecording}
+                    style={{
+                      padding: '10px 12px', borderRadius: '50%', fontSize: 18,
+                      background: isRecording ? 'var(--accent-red)' : 'var(--bg)',
+                      border: '1px solid var(--border)', cursor: 'pointer',
+                      animation: isRecording ? 'pulse 1s infinite' : 'none'
+                    }}
+                    title="Nagraj głosówkę"
+                  >
+                    🎤
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleSend}
+                    disabled={loading || !input.trim()}
+                    style={{ padding: '10px 12px', borderRadius: '50%', fontSize: 14 }}
+                  >
+                    ➤
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* RIGHT: Preview + Send */}
+            {(step === 'preview' || step === 'done') && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {/* Preview */}
+                <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                  <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)', textTransform: 'uppercase' }}>
+                      👁️ Podgląd mailingu
+                    </span>
+                    {parsedData && (
+                      <span className={`badge ${parsedData.type === 'FREE_TRUCK' ? 'badge-green' : 'badge-blue'}`}>
+                        {parsedData.type === 'FREE_TRUCK' ? '🚛 FREE TANK' : '📦 FREE LOAD'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="preview-frame" style={{ maxHeight: 400, overflowY: 'auto' }}>
+                    <iframe
+                      srcDoc={previewHtml}
+                      style={{ width: '100%', height: 400, border: 'none' }}
+                      title="Email Preview"
+                    />
+                  </div>
+                </div>
+
+                {/* Send options */}
+                {step === 'preview' && (
+                  <div className="card">
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>
+                      🚀 Wyślij mailing
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+                      <div>
+                        <label>Wyślij z</label>
+                        <select
+                          value={parsedData?.send_options?.send_from || 'office@route11.eu'}
+                          onChange={e => setParsedData(prev => ({
+                            ...prev,
+                            send_options: { ...prev.send_options, send_from: e.target.value }
+                          }))}
+                        >
+                          <option value="office@route11.eu">📧 office@route11.eu</option>
+                          <option value="chemicals@route11.eu">🧪 chemicals@route11.eu</option>
+                          <option value="orders@route11.eu">📋 orders@route11.eu</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label>Kiedy</label>
+                        <select
+                          value={parsedData?.send_options?.send_when || 'now'}
+                          onChange={e => setParsedData(prev => ({
+                            ...prev,
+                            send_options: { ...prev.send_options, send_when: e.target.value }
+                          }))}
+                        >
+                          <option value="now">⚡ Wyślij teraz</option>
+                          <option value="13:00">🕐 O 13:00</option>
+                          <option value="15:00">🕐 O 15:00</option>
+                          <option value="09:00">🕐 Jutro o 9:00</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="btn btn-green" onClick={handleSendNewsletter} disabled={loading} style={{ flex: 1 }}>
+                        {loading ? <><div className="spinner" /> Wysyłanie...</> : '🚀 Wyślij newsletter'}
+                      </button>
+                      <button className="btn btn-ghost" onClick={handleReset}>
+                        🔄 Nowy
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {step === 'done' && (
+                  <div className="card" style={{ textAlign: 'center', padding: 32 }}>
+                    <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
+                    <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Newsletter wysłany!</h3>
+                    <p style={{ color: 'var(--text-dim)', fontSize: 13, marginBottom: 20 }}>
+                      Mailing trafi do wszystkich kontaktów w GetResponse.
+                    </p>
+                    <button className="btn btn-primary" onClick={handleReset}>
+                      🔄 Wyślij kolejny mailing
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       );
     }

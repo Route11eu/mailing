@@ -959,10 +959,12 @@
 
               try {
                 const context = messages.map(m => m.role + ': ' + m.text).join('\n');
+                const previousData = parsedData ? JSON.stringify(parsedData) : '';
                 const result = await callGAS_POST('smartMailParseAudio', {
                   audio: base64,
                   mimeType: mimeType,
-                  context: context
+                  context: context,
+                  previousData: previousData
                 });
 
                 if (result.success && result.result) {
@@ -1047,10 +1049,11 @@
         setLoading(true);
 
         try {
-          // Build context from previous messages
+          // Build context from previous messages + already parsed data
           const context = messages.map(m => m.role + ': ' + m.text).join('\n');
+          const previousData = parsedData ? JSON.stringify(parsedData) : '';
 
-          const result = await callGAS('smartMailParse', { text, context });
+          const result = await callGAS('smartMailParse', { text, context, previousData });
 
           if (result.success && result.result) {
             const r = result.result;

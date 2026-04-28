@@ -1003,7 +1003,37 @@
 
                   setMessages(prev => [...prev, { role: 'ai', text: aiText, data: r, ts: Date.now() }]);
                 } else {
-                  setMessages(prev => [...prev, { role: 'ai', text: '❌ ' + (result.error || 'Błąd'), ts: Date.now() }]);
+                  // Check if rate limit error — auto-retry
+                  const errMsg = result.error || 'Błąd';
+                  if (errMsg.includes('429') || errMsg.includes('przepustow') || errMsg.includes('limit') || errMsg.includes('RESOURCE_EXHAUSTED')) {
+                    setMessages(prev => [...prev, { role: 'ai', text: '⏳ Serwer zajęty — ponawiam za 8 sekund...', ts: Date.now() }]);
+                    await new Promise(r => setTimeout(r, 8000));
+                    // Retry the same call
+                    const retryResult = await callGAS_POST('smartMailParseAudio', {
+                      audio: base64, mimeType: mimeType, context: context, previousData: previousData
+                    });
+                    if (retryResult.success && retryResult.result) {
+                      const rr = retryResult.result;
+                      if (rr.is_new_entry && parsedData) {
+                        setPreviewHtml(''); setStep('input');
+                      }
+                      setParsedData(rr);
+                      const tr2 = retryResult.transcription || rr.transcription || '';
+                      let aiText2 = tr2 ? '📝 Transkrypcja: "' + tr2 + '"\n\n' : '';
+                      if (rr.complete) {
+                        const prev2 = await callGAS('smartMailPreview', rr);
+                        if (prev2.success) { setPreviewHtml(prev2.html); setStep('preview'); }
+                        aiText2 += '✅ ' + (rr.summary || 'Sparsowano z audio') + '\n\nPodgląd mailingu jest gotowy.';
+                      } else {
+                        aiText2 += rr.question || 'Potrzebuję więcej informacji.';
+                      }
+                      setMessages(prev => [...prev, { role: 'ai', text: aiText2, data: rr, ts: Date.now() }]);
+                    } else {
+                      setMessages(prev => [...prev, { role: 'ai', text: '❌ ' + (retryResult.error || 'Błąd po ponowieniu'), ts: Date.now() }]);
+                    }
+                  } else {
+                    setMessages(prev => [...prev, { role: 'ai', text: '❌ ' + errMsg, ts: Date.now() }]);
+                  }
                 }
               } catch (err) {
                 setMessages(prev => [...prev, { role: 'ai', text: '❌ Błąd: ' + err.message, ts: Date.now() }]);

@@ -969,6 +969,18 @@
 
                 if (result.success && result.result) {
                   const r = result.result;
+
+                  // If new entry, reset previous
+                  if (r.is_new_entry && parsedData) {
+                    setMessages(prev => [...prev, {
+                      role: 'ai',
+                      text: '🆕 Nowy wpis! Poprzedni mailing zastąpiony nowym.',
+                      ts: Date.now()
+                    }]);
+                    setPreviewHtml('');
+                    setStep('input');
+                  }
+
                   setParsedData(r);
 
                   // Show transcription
@@ -1057,6 +1069,18 @@
 
           if (result.success && result.result) {
             const r = result.result;
+
+            // If this is a new entry, reset previous data first
+            if (r.is_new_entry && parsedData) {
+              setMessages(prev => [...prev, {
+                role: 'ai',
+                text: '🆕 Nowy wpis! Poprzedni mailing został zastąpiony nowym.',
+                ts: Date.now()
+              }]);
+              setPreviewHtml('');
+              setStep('input');
+            }
+
             setParsedData(r);
 
             if (r.complete) {

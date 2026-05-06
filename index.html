@@ -904,6 +904,7 @@
       const inputRef = useRef(null);
       const fileInputRef = useRef(null);
       const dropZoneRef = useRef(null);
+      const lastFileRef = useRef(null); // stores {base64, name, mimeType} for re-parse on checkbox change
 
       // Scroll to bottom on new messages
       useEffect(() => {
@@ -1077,6 +1078,8 @@
           const reader = new FileReader();
           reader.onloadend = async () => {
             const base64 = reader.result.split(',')[1];
+            // Store file for re-parse on checkbox toggle
+            lastFileRef.current = { base64, name: file.name, mimeType: file.type || 'application/octet-stream' };
             const context = messages.map(m => m.role + ': ' + m.text).join('\n');
             const previousData = parsedData ? JSON.stringify(parsedData) : '';
 
@@ -1415,12 +1418,52 @@
               {/* Obfuscation checkboxes */}
               <div style={{ display: 'flex', gap: 16, padding: '10px 0 4px', borderTop: '1px solid var(--border)', marginTop: 8 }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-dim)', cursor: 'pointer', userSelect: 'none' }}>
-                  <input type="checkbox" checked={obfuscateLoading} onChange={e => setObfuscateLoading(e.target.checked)}
+                  <input type="checkbox" checked={obfuscateLoading} onChange={async (e) => {
+                    const newVal = e.target.checked;
+                    setObfuscateLoading(newVal);
+                    // Auto re-parse if file was uploaded
+                    if (lastFileRef.current && parsedData) {
+                      setLoading(true);
+                      setMessages(prev => [...prev, { role: 'ai', text: '🔄 Zmieniam załadunek... ' + (newVal ? 'podmieniam na duże miasta' : 'przywracam oryginalne'), ts: Date.now() }]);
+                      const f = lastFileRef.current;
+                      const result = await callGAS_POST('smartMailParseFile', {
+                        file: f.base64, fileName: f.name, mimeType: f.mimeType,
+                        context: '', previousData: '', obfuscateLoading: newVal, obfuscateUnloading
+                      });
+                      if (result.success && result.result) {
+                        setParsedData(result.result);
+                        const prev = await callGAS_POST('smartMailPreview', result.result);
+                        if (prev.success) { setPreviewHtml(prev.html); setStep('preview'); }
+                        setMessages(p => [...p, { role: 'ai', text: '✅ Zaktualizowano ' + (result.result.routes_count || '?') + ' tras', ts: Date.now() }]);
+                      }
+                      setLoading(false);
+                    }
+                  }}
                     style={{ accentColor: 'var(--accent-orange)', width: 16, height: 16, cursor: 'pointer' }} />
                   🔄 Zmień załadunek
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-dim)', cursor: 'pointer', userSelect: 'none' }}>
-                  <input type="checkbox" checked={obfuscateUnloading} onChange={e => setObfuscateUnloading(e.target.checked)}
+                  <input type="checkbox" checked={obfuscateUnloading} onChange={async (e) => {
+                    const newVal = e.target.checked;
+                    setObfuscateUnloading(newVal);
+                    // Auto re-parse if file was uploaded
+                    if (lastFileRef.current && parsedData) {
+                      setLoading(true);
+                      setMessages(prev => [...prev, { role: 'ai', text: '🔄 Zmieniam rozładunek... ' + (newVal ? 'podmieniam na duże miasta' : 'przywracam oryginalne'), ts: Date.now() }]);
+                      const f = lastFileRef.current;
+                      const result = await callGAS_POST('smartMailParseFile', {
+                        file: f.base64, fileName: f.name, mimeType: f.mimeType,
+                        context: '', previousData: '', obfuscateLoading, obfuscateUnloading: newVal
+                      });
+                      if (result.success && result.result) {
+                        setParsedData(result.result);
+                        const prev = await callGAS_POST('smartMailPreview', result.result);
+                        if (prev.success) { setPreviewHtml(prev.html); setStep('preview'); }
+                        setMessages(p => [...p, { role: 'ai', text: '✅ Zaktualizowano ' + (result.result.routes_count || '?') + ' tras', ts: Date.now() }]);
+                      }
+                      setLoading(false);
+                    }
+                  }}
                     style={{ accentColor: 'var(--accent-orange)', width: 16, height: 16, cursor: 'pointer' }} />
                   🔄 Zmień rozładunek
                 </label>

@@ -897,8 +897,11 @@
       const [previewHtml, setPreviewHtml] = useState('');
       const [isRecording, setIsRecording] = useState(false);
       const [step, setStep] = useState('input'); // input | preview | sending | done
+      const [obfuscateLoading, setObfuscateLoading] = useState(false);
+      const [obfuscateUnloading, setObfuscateUnloading] = useState(false);
       const chatEndRef = useRef(null);
       const inputRef = useRef(null);
+      const fileInputRef = useRef(null);
 
       // Scroll to bottom on new messages
       useEffect(() => {
@@ -1056,6 +1059,88 @@
         }
       };
 
+      // File upload handler
+      const handleFileUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        fileInputRef.current.value = ''; // reset for re-upload
+
+        const maxSize = 10 * 1024 * 1024; // 10MB
+        if (file.size > maxSize) {
+          addToast('Plik za duży (max 10MB)', 'error');
+          return;
+        }
+
+        setLoading(true);
+        const userMsg = { role: 'user', text: '📎 Plik: ' + file.name + ' (' + (file.size / 1024).toFixed(0) + ' KB)', ts: Date.now() };
+        setMessages(prev => [...prev, userMsg]);
+
+        try {
+          const reader = new FileReader();
+          reader.onloadend = async () => {
+            const base64 = reader.result.split(',')[1];
+            const context = messages.map(m => m.role + ': ' + m.text).join('\n');
+            const previousData = parsedData ? JSON.stringify(parsedData) : '';
+
+            const result = await callGAS_POST('smartMailParseFile', {
+              file: base64,
+              fileName: file.name,
+              mimeType: file.type || 'application/octet-stream',
+              context: context,
+              previousData: previousData,
+              obfuscateLoading: obfuscateLoading,
+              obfuscateUnloading: obfuscateUnloading
+            });
+
+            if (result.success && result.result) {
+              const r = result.result;
+              setParsedData(r);
+
+              let aiText = '📋 Rozpoznano ' + (r.routes_count || '?') + ' tras z pliku.';
+              if (r.complete) {
+                const previewResult = await callGAS('smartMailPreview', r);
+                if (previewResult.success) {
+                  setPreviewHtml(previewResult.html);
+                  setStep('preview');
+                }
+                aiText += '\n\n✅ ' + (r.summary || 'Mailing gotowy.') + '\n\nPodgląd jest gotowy.';
+              } else {
+                aiText += '\n\n' + (r.question || 'Potrzebuję więcej informacji.');
+              }
+              setMessages(prev => [...prev, { role: 'ai', text: aiText, data: r, ts: Date.now() }]);
+            } else {
+              const errMsg = result.error || 'Błąd parsowania pliku';
+              if (errMsg.includes('429') || errMsg.includes('RESOURCE_EXHAUSTED')) {
+                setMessages(prev => [...prev, { role: 'ai', text: '⏳ Serwer zajęty — ponawiam za 8s...', ts: Date.now() }]);
+                await new Promise(r => setTimeout(r, 8000));
+                // Retry once
+                const retry = await callGAS_POST('smartMailParseFile', {
+                  file: base64, fileName: file.name, mimeType: file.type || 'application/octet-stream',
+                  context, previousData, obfuscateLoading, obfuscateUnloading
+                });
+                if (retry.success && retry.result) {
+                  setParsedData(retry.result);
+                  if (retry.result.complete) {
+                    const prev2 = await callGAS('smartMailPreview', retry.result);
+                    if (prev2.success) { setPreviewHtml(prev2.html); setStep('preview'); }
+                  }
+                  setMessages(prev => [...prev, { role: 'ai', text: '✅ ' + (retry.result.summary || 'Sparsowano z pliku'), ts: Date.now() }]);
+                } else {
+                  setMessages(prev => [...prev, { role: 'ai', text: '❌ ' + (retry.error || 'Błąd'), ts: Date.now() }]);
+                }
+              } else {
+                setMessages(prev => [...prev, { role: 'ai', text: '❌ ' + errMsg, ts: Date.now() }]);
+              }
+            }
+            setLoading(false);
+          };
+          reader.readAsDataURL(file);
+        } catch (err) {
+          setMessages(prev => [...prev, { role: 'ai', text: '❌ Błąd: ' + err.message, ts: Date.now() }]);
+          setLoading(false);
+        }
+      };
+
       // API call via GET (small payloads)
       const callGAS = async (action, payload) => {
         const url = GAS_SM_URL + '?action=' + action + '&secret=' + SM_SECRET
@@ -1095,7 +1180,7 @@
           const context = messages.map(m => m.role + ': ' + m.text).join('\n');
           const previousData = parsedData ? JSON.stringify(parsedData) : '';
 
-          const result = await callGAS('smartMailParse', { text, context, previousData });
+          const result = await callGAS('smartMailParse', { text, context, previousData, obfuscateLoading, obfuscateUnloading });
 
           if (result.success && result.result) {
             const r = result.result;
@@ -1217,12 +1302,12 @@
                 {messages.length === 0 && (
                   <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: '40px 20px' }}>
                     <div style={{ fontSize: 40, marginBottom: 16 }}>🚛</div>
-                    <p><b>Wpisz lub nagraj</b> opis wolnego auta / ładunku.</p>
+                    <p><b>Wpisz, nagraj lub wgraj plik</b> z trasami.</p>
                     <p style={{ fontSize: 12, marginTop: 8 }}>
                       Przykład: <i>"Wolne auto na dzisiaj w Warszawie, destynacja UE, bez ADR"</i>
                     </p>
                     <p style={{ fontSize: 12 }}>
-                      Przykład: <i>"Ładunek glikol, jutro z Płocka do Kłajpedy, MONO/MULTI"</i>
+                      📎 Lub wgraj plik z tabelką tras (screenshot, PDF, Excel)
                     </p>
                   </div>
                 )}
@@ -1287,8 +1372,47 @@
                 </div>
               )}
 
-              {/* Mic button — always visible, prominent */}
-              <div style={{ display: 'flex', justifyContent: 'center', paddingTop: isRecording ? 0 : 12 }}>
+              {/* Obfuscation checkboxes */}
+              <div style={{ display: 'flex', gap: 16, padding: '10px 0 4px', borderTop: '1px solid var(--border)', marginTop: 8 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-dim)', cursor: 'pointer', userSelect: 'none' }}>
+                  <input type="checkbox" checked={obfuscateLoading} onChange={e => setObfuscateLoading(e.target.checked)}
+                    style={{ accentColor: 'var(--accent-orange)', width: 16, height: 16, cursor: 'pointer' }} />
+                  🔄 Zmień załadunek
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-dim)', cursor: 'pointer', userSelect: 'none' }}>
+                  <input type="checkbox" checked={obfuscateUnloading} onChange={e => setObfuscateUnloading(e.target.checked)}
+                    style={{ accentColor: 'var(--accent-orange)', width: 16, height: 16, cursor: 'pointer' }} />
+                  🔄 Zmień rozładunek
+                </label>
+              </div>
+              {(obfuscateLoading || obfuscateUnloading) && (
+                <p style={{ fontSize: 10, color: 'var(--accent-orange)', margin: '2px 0 6px', fontStyle: 'italic' }}>
+                  AI podmieni {obfuscateLoading && obfuscateUnloading ? 'załadunek i rozładunek' : obfuscateLoading ? 'załadunek' : 'rozładunek'} na najbliższe duże miasto (max 50km)
+                </p>
+              )}
+
+              {/* Mic + File upload buttons */}
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 16, paddingTop: isRecording ? 0 : 8 }}>
+                {/* Upload button */}
+                <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*,.pdf,.xlsx,.xls,.csv,.txt" style={{ display: 'none' }} />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={loading || isRecording}
+                  style={{
+                    width: 56, height: 56, borderRadius: '50%', border: 'none', cursor: 'pointer',
+                    fontSize: 24, color: 'white',
+                    background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                    boxShadow: '0 4px 16px rgba(245,158,11,0.3)',
+                    transition: 'all 0.3s ease',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    opacity: loading || isRecording ? 0.4 : 1
+                  }}
+                  title="Wgraj plik z trasami (screenshot, PDF, Excel)"
+                >
+                  📎
+                </button>
+
+                {/* Mic button */}
                 <button
                   onClick={startVoice}
                   disabled={loading}
@@ -1327,7 +1451,7 @@
               </div>
               {!isRecording && !loading && (
                 <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 11, margin: '4px 0 0' }}>
-                  Kliknij mikrofon i powiedz np. <i>"Wolne auto Warszawa, destynacja UE, bez ADR"</i>
+                  📎 Wgraj plik &nbsp;|&nbsp; 🎤 Nagraj &nbsp;|&nbsp; ⌨️ Wpisz opis
                 </p>
               )}
               {isRecording && (
